@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import numpy as np
 from tqdm import tqdm
 import os
@@ -86,11 +84,15 @@ class Trainer:
         y_true = np.concatenate(y_true)
         loss = np.mean(losses)
         if topk > 1:
-            acc = top_k_accuracy_score(
-                y_true, y_pred, k=topk, labels=np.arange(self.num_classes))
+            for k in range(1, self.num_classes + 1):
+                acc = top_k_accuracy_score(
+                    y_true, y_pred, k=k, labels=np.arange(self.num_classes))
+                if acc >= 0.997:
+                    self.logger.info(f"Top-{k} accuracy: {acc}")
+                    return loss, acc, k
         else:
             acc = accuracy_score(y_true, np.argmax(y_pred, axis=1))
-        return loss, acc
+        return loss, acc, 1
 
     def train(self, device: str = 'cpu', save_dir: str = None, model_name: str = None, topk: int = 1):
         train_loader = DataLoader(
@@ -118,49 +120,23 @@ class Trainer:
         for epoch in range(self.no_epochs):
             train_loss = self._train_epoch(
                 train_loader, device, self.scheduler, progress_bar)
-            val_loss, val_acc = self._valid_epoch(
+            val_loss, val_acc, valid_k = self._valid_epoch(
                 val_loader, device, topk=topk)
             if self.logger is not None:
                 self.logger.debug(
+                    f"Epoch {epoch + 1}||Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f} - Val Acc: {val_acc:.4f}")
+                print(
                     f"Epoch {epoch + 1}||Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f} - Val Acc: {val_acc:.4f}")
             total_train_loss += train_loss
             total_val_loss += val_loss
             total_val_acc += val_acc
             if save_dir is not None and model_name is not None:
                 self.save_model(save_dir, model_name)
+        _, _, train_k = self._valid_epoch(train_loader, device, topk=topk)
+        self.logger.info(
+            f"Train top-{topk}: {train_k}, Valid top-{topk}: {valid_k}")
         self.save_model(save_dir, model_name)
-        return total_train_loss / self.no_epochs, val_loss, val_acc
-
-    def predict_supervised(self, dataset, y_true, device: str = 'cpu'):
-        test_loader = DataLoader(
-            dataset, batch_size=self.batch_size, shuffle=False)
-        self.model.to(device)
-        self.model, test_loader = self.accelerator.prepare(
-            self.model, test_loader)
-        self.model.eval()
-        y_pred = {k: 0 for k in y_true.keys()}
-        progress_bar = tqdm(total=len(test_loader), desc=f"Predict",
-                            disable=not self.accelerator.is_local_main_process)
-        for batch in test_loader:
-            idxs = self.accelerator.gather(batch['idx']).cpu().numpy().tolist()
-            del batch['idx']
-            # batch = {k: v.to(device) for k, v in batch.items()}
-            with torch.no_grad():
-                y = self.model.predict_class(batch, device=device)
-            # y = torch.argmax(y_prob, dim=1)
-            y = self.accelerator.gather(y).cpu().numpy().tolist()
-            for idx, y_i in zip(idxs, y):
-                y_pred[idx] = y_pred[idx] | y_i
-            progress_bar.update(1)
-
-        idxs = list(y_true.keys())
-        y_pred = np.array([y_pred[idx] for idx in idxs])
-        y_true = np.array([y_true[idx] for idx in idxs])
-        acc = accuracy_score(y_true, y_pred)
-        f1 = f1_score(y_true, y_pred)
-        pre = precision_score(y_true, y_pred)
-        rec = recall_score(y_true, y_pred)
-        return acc, f1, pre, rec
+        return total_train_loss / self.no_epochs, val_loss, val_acc, max(train_k, valid_k)
 
     def predict_unsupervised(self,
                              dataset,

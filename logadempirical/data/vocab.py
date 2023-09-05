@@ -20,7 +20,6 @@ class Vocab(object):
         self.stoi = {}
         self.itos = ['padding']
         self.pad_token = "padding"
-        counter = 0
         # NOTE as logs are a list of lists, we need to flatten it first and remove duplicates
         for line in logs:
             self.itos.extend(line)
@@ -32,7 +31,6 @@ class Vocab(object):
         self.unk_index = len(self.itos)
         # NOTE add indices where e is the event and i is the index
         self.stoi = {e: i for i, e in enumerate(self.itos)}
-        print("emb file path: {}".format(emb_file))
         self.semantic_vectors = read_json(emb_file)
         self.semantic_vectors = {k: v if type(v) is list else [0] * embedding_dim
                                  for k, v in self.semantic_vectors.items()}

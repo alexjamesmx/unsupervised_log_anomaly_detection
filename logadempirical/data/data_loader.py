@@ -100,11 +100,8 @@ def process_dataset(logger: Logger,
                 f"process dataset: window_df (sessions) size {len(window_df)}, train_size {train_size}, n_train: {len(window_df) * train_size}")
             train_window = window_df[:n_train]
             test_window = window_df[n_train:]
-
-            logger.info("process dataset: train_window size: {}".format(
-                len(train_window)))
             logger.info(
-                "process dataset: test_window size: {}".format(len(test_window)))
+                f"process dataset: train_window and test_window sizes: {len(train_window)}, {len(test_window)}")
         elif dataset_name == "BGL":
             # df["NodeId"] = df["Node"].apply(lambda x: str(x).split(":")[0])
             # window df
@@ -119,16 +116,17 @@ def process_dataset(logger: Logger,
     else:
         raise NotImplementedError(f"{grouping} is not implemented")
 
-    # NOTE
-    with open("./testing/sessions_training_before_remove_anomalies_and_splitting.txt", "w") as f:
-        sys.stdout = f
+    # # NOTE
+    # with open("./testing/sessions_training_before_remove_anomalies_and_splitting.txt", "w") as f:
+    #     sys.stdout = f
 
-        for j, result in enumerate(train_window[:10]):
-            f.write(f"Index {j}: {result}\n")
-        for j, result in enumerate(train_window[len(train_window)-10:], start=len(train_window) - 10):
-            f.write(f"Index {j}: {result}\n")
+    #     for j, result in enumerate(train_window[:10]):
+    #         f.write(f"Index {j}: {result}\n")
+    #     for j, result in enumerate(train_window[len(train_window)-10:], start=len(train_window) - 10):
+    #         f.write(f"Index {j}: {result}\n")
 
-    logger.info(f"Saving {output_dir}/train.pkl and {output_dir}/test.pkl")
+    logger.info(
+        f"Saving sessions at {output_dir}/train.pkl and {output_dir}/test.pkl\n")
     os.makedirs(output_dir, exist_ok=True)
     with open(os.path.join(output_dir, "train.pkl"), mode="wb") as f:
         pickle.dump(train_window, f)

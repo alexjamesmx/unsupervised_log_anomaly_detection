@@ -63,8 +63,6 @@ class DeepLog(nn.Module):
         del src['label']
         return torch.topk(self.forward(src, device=device).probabilities, k=top_k, dim=1).indices
 
-# log key add embedding
-
 
 class LogAnomaly(nn.Module):
     def __init__(self,

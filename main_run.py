@@ -61,16 +61,13 @@ def build_vocab(vocab_path: str,
         with open(train_path, 'rb') as f:
             data = pickle.load(f)
         # NOTE - vocab is created with the EventTemplates
-        if is_unsupervised:
-            logs = [x['EventTemplate']
-                    for x in data if np.max(x['Label']) == 0]
-
+        logs = [x['EventTemplate']
+                for x in data if np.max(x['Label']) == 0]
         logger.info(f"Lenght of logs eventTemplate: {len(logs)}")
-
         vocab = Vocab(logs, os.path.join(data_dir, embeddings),
                       embedding_dim=embedding_dim)
-        logger.info(f"Save vocab in {vocab_path}")
-        logger.info(f"Vocab size: {len(vocab)}")
+        logger.info(f"Main: Save vocab in {vocab_path}")
+        logger.info(f"Main: Vocab size: {len(vocab)}")
         vocab.save_vocab(vocab_path)
     # load vocab if it exists
     else:
@@ -141,8 +138,6 @@ def train_and_eval(args: argparse.Namespace,
     -------
     Accuracy metrics
     """
-    logger.info("Loading train and eval...")
-    logger.info(f"train path: {train_path}")
     data, stat = load_features(train_path,
                                is_unsupervised=is_unsupervised,
                                is_train=True)
@@ -157,26 +152,27 @@ def train_and_eval(args: argparse.Namespace,
         f"Main: ,training, valid size: {len(train_data)}, {str(n_valid)} where valid ratio is {args.valid_ratio}")
 
     # NOTE - copy the train data to a file
-    output_data_first = [
-        f"Index {i}: {log}" for i, log in enumerate(train_data[:10], start=1)]
+    # output_data_first = [
+    #     f"Index {i}: {log}" for i, log in enumerate(train_data[:10], start=1)]
 
-    output_data_last = [
-        f"Index {i}: {log}" for i, log in enumerate(train_data[len(train_data)-10:], start=len(train_data)-9)]
+    # output_data_last = [
+    # f"Index {i}: {log}" for i, log in enumerate(train_data[len(train_data)-10:], start=len(train_data)-9)]
 
-    with open("./testing/sessions_training_before_sliding_windows.txt", "w") as f:
-        sys.stdout = f
-        for item in output_data_first:
-            f.write("%s\n" % item)
-        for item in output_data_last:
-            f.write("%s\n" % item)
-    sys.stdout = sys.__stdout__
+    # with open("./testing/sessions_training_before_sliding_windows.txt", "w") as f:
+    #     sys.stdout = f
+    #     for item in output_data_first:
+    #         f.write("%s\n" % item)
+    #     for item in output_data_last:
+    #         f.write("%s\n" % item)
+    # sys.stdout = sys.__stdout__
     ################
     # build train dataset
     sequentials, quantitatives, semantics, labels, idxs, _ = sliding_window(
         train_data,
         vocab=vocab,
         window_size=args.history_size,
-        is_train=True,
+        # NOTE Testint is_Train = True
+        is_train=False,
         semantic=args.semantic,
         quantitative=args.quantitative,
         sequential=args.sequential,
@@ -202,6 +198,7 @@ def train_and_eval(args: argparse.Namespace,
         sequentials, quantitatives, semantics, labels, sequence_idxs)
     logger.info(f"Train dataset: {len(train_dataset)}")
     logger.info(f"Valid dataset: {len(valid_dataset)}")
+    print(f"Model parameters: {model.parameters()}")
     optimizer = get_optimizer(args, model.parameters())
 
     device = accelerator.device
@@ -223,7 +220,7 @@ def train_and_eval(args: argparse.Namespace,
         accumulation_step=args.accumulation_step,
         logger=logger,
         accelerator=accelerator,
-        num_classes=len(vocab) if is_unsupervised else args.n_class,
+        num_classes=len(vocab),
     )
     # load model if resuming
     if args.resume and os.path.exists(f"{args.output_dir}/models/{args.model_name}.pt"):
@@ -233,27 +230,20 @@ def train_and_eval(args: argparse.Namespace,
 
     # save model if training
     if args.train:
-        train_loss, val_loss, val_acc = trainer.train(device=device,
-                                                      save_dir=f"{args.output_dir}/models",
-                                                      model_name=args.model_name,
-                                                      topk=1 if not is_unsupervised else args.topk)
+        train_loss, val_loss, val_acc, args.topk = trainer.train(device=device,
+                                                                 save_dir=f"{args.output_dir}/models",
+                                                                 model_name=args.model_name,
+                                                                 topk=args.topk)
         logger.info(
             f"Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f} - Val Acc: {val_acc:.4f}")
 
-    if is_unsupervised:
-        acc, recommend_topk = trainer.predict_unsupervised(valid_dataset,
-                                                           session_labels,
-                                                           topk=args.topk,
-                                                           device=device,
-                                                           is_valid=True)
-        logger.info(
-            f"Validation Result:: Acc: {acc:.4f}, Top-{args.topk} Recommendation: {recommend_topk}")
-    else:
-        acc, f1, pre, rec = trainer.predict_supervised(valid_dataset,
+    acc, recommend_topk = trainer.predict_unsupervised(valid_dataset,
                                                        session_labels,
-                                                       device=device)
-        logger.info(
-            f"Validation Result:: Acc: {acc:.4f}, Precision: {pre:.4f}, Recall: {rec:.4f}, F1: {f1:.4f}")
+                                                       topk=args.topk,
+                                                       device=device,
+                                                       is_valid=True)
+    logger.info(
+        f"Validation Result:: Acc: {acc:.4f}, Top-{args.topk} Recommendation: {recommend_topk}")
     # now load test data
     print("Loading test dataset\n")
     data, stat = load_features(test_path,
@@ -287,16 +277,15 @@ def train_and_eval(args: argparse.Namespace,
         sequentials, quantitatives, semantics, labels, sequence_idxs)
     logger.info(f"Test dataset: {len(test_dataset)}")
     if is_unsupervised:
+        logger.info(
+            f"Start predicting {args.model_name} model on {device} device with top-{args.topk} recommendation")
         acc, f1, pre, rec = trainer.predict_unsupervised(test_dataset,
                                                          session_labels,
                                                          topk=args.topk,
                                                          device=device,
                                                          is_valid=False,
                                                          num_sessions=num_sessions)
-    else:
-        acc, f1, pre, rec = trainer.predict_supervised(test_dataset,
-                                                       session_labels,
-                                                       device=device)
+
     logger.info(
         f"Test Result:: Acc: {acc:.4f}, Precision: {pre:.4f}, Recall: {rec:.4f}, F1: {f1:.4f}")
     return acc, f1, pre, rec
@@ -354,15 +343,17 @@ def run(args):
                    logger=logger)
 
 
-# When run program
 if __name__ == "__main__":
     parser = arg_parser()
     args = parser.parse_args()
-
     if args.config_file is not None and os.path.exists(args.config_file):
         config_file = args.config_file
+
         with open(config_file, "r") as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
-            args = argparse.Namespace(**config)
+            config_args = argparse.Namespace(**config)
+            for k, v in config_args.__dict__.items():
+                if v is not None:
+                    setattr(args, k, v)
         print(f"Loaded config from {config_file}!")
     run(args)

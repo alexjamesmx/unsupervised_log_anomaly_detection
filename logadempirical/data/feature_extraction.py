@@ -30,15 +30,15 @@ def load_features(data_path, is_unsupervised=True, min_len=0, is_train=True):
     output_data_last_10 = [
         f"Training data {i}: {log}" for i, log in enumerate(data[len(data)-10:], start=len(data)-9)]
 
-    with open("./testing/train_data_before_load_features.txt", "w") as f:
-        sys.stdout = f
-        print("Training data before load features: \n")
-        for item in output_data_first_10:
-            f.write("%s\n" % item)
-        for item in output_data_last_10:
-            f.write("%s\n" % item)
-    sys.stdout = sys.__stdout__
-    ###############
+    # with open("./testing/train_data_before_load_features.txt", "w") as f:
+    #     sys.stdout = f
+    #     print("Training data before load features: \n")
+    #     for item in output_data_first_10:
+    #         f.write("%s\n" % item)
+    #     for item in output_data_last_10:
+    #         f.write("%s\n" % item)
+    # sys.stdout = sys.__stdout__
+
     print(f"\nLoading features...")
 
     print(f"load features: train length: {len(data)}")
@@ -52,12 +52,8 @@ def load_features(data_path, is_unsupervised=True, min_len=0, is_train=True):
             for seq in data:
                 # NOTE only true when min_len > 0
                 if len(seq['EventTemplate']) < min_len:
-                    print(
-                        f"Feature extraction: \n len(seq['EventTemplate']) < min_len: {len(seq['EventTemplate'])}")
                     continue
                 if not isinstance(seq['Label'], int):
-                    print(
-                        f"Feature extraction: \n NOT instance: seq['Label']: {seq['Label']}")
                     label = max(seq['Label'])
                 else:
                     label = seq['Label']
@@ -121,90 +117,202 @@ def sliding_window(data: List[Tuple[List[str], int]],
     log_sequences = []
     session_labels = {}
     unique_ab_events = set()
-    print("\nSliding windows where window size is ", window_size)
+    # NOTE here "is_train" is for analysis purpose, where files are copied to a file, and print statements are used. is the same as else conditional,
+    # so if you want clean code you can remove the if else and just use the what else conditional contains, because test and train use the same code.
 
-    # for each log
-    for idx, (templates, labels) in tqdm(enumerate(data), total=len(data),
-                                         desc=f"Sliding window with size {window_size}"):
-        line = list(templates)
-        # add n padding tokens to the end of the sequence if window size is different from the length of the sequence
-        line = line + [vocab.pad_token] * \
-            (window_size - len(line) + is_unsupervised)
-        if isinstance(labels, list):
-            labels = [0] * (window_size - len(labels) +
-                            is_unsupervised) + labels
-        session_labels[idx] = labels if isinstance(
-            labels, int) else max(labels)
-        # for all events in a log
-        for i in range(len(line) - window_size if is_unsupervised else len(line) - window_size + 1):
-            if is_unsupervised:
-                # get the index of the event in the window sequence
-                label = vocab.get_event(line[i + window_size],
-                                        use_similar=quantitative)  # use_similar only for LogAnomaly
+    if is_train:
+        # NOTE - copy the train data to a file
+        # print("Creating vocab_stoi.txt")
+        # with open("./testing/vocab_stoi.txt", "w") as f:
+        #     sys.stdout = f
+        #     for k, v in vocab.stoi.items():
+        #         print(k, v)
+        # sys.stdout = sys.__stdout__
+        with open("./testing/sequential_quantitives_semantics.txt", "w") as f:
+            # for each log
+            for idx, (templates, labels) in tqdm(enumerate(data), total=len(data),
+                                                 desc=f"Sliding window with size {window_size}"):
+                line = list(templates)
+                # add n padding tokens to the end of the sequence if window size is different from the length of the sequence
+                line = line + [vocab.pad_token] * \
+                    (window_size - len(line) + is_unsupervised)
 
-            seq = line[i: i + window_size]
-            # NOTE testing
-            # if i < 2 and idx < 1:
-            # print(f"sliding window: seq: {seq}")
-            # Get sequential patterns for all sequences in each log
-            sequential_pattern = [vocab.get_event(
-                event, use_similar=quantitative) for event in seq]
-            semantic_pattern = None
-            # print(f"sequential_pattern " + str(sequential_pattern) + "idx ", idx)
-            if semantic:
-                print("semantic")
-                semantic_pattern = [
-                    vocab.get_embedding(event) for event in seq]
-            quantitative_pattern = None
+                # NOTE test padding
+                # if len(line) != len(list(templates)):
+                #     print("line length != list(templates) length ", line)
+
+                if isinstance(labels, list):
+                    print("labels is a list")
+                    labels = [0] * (window_size - len(labels) +
+                                    is_unsupervised) + labels
+
+                session_labels[idx] = labels if isinstance(
+                    labels, int) else max(labels)
+                # NOTE testing - print the first session and slide window
+                # if idx == 0:
+                #     print(
+                #         f"First session: length {len(data[0])} content {data[idx]} \n")
+                # for all events in a log
+                # NOTE - copy to a file
+                # Check if the current iteration index is within the first 10 or last 10
+                if idx < 10 or idx >= len(data) - 10:
+                    output_line = f"Length: {len(line)}, Line: {line}"
+                    output_labels = f"labels: {labels}"
+                    output_session_labels = f"Session labels: {session_labels}"
+
+                    # Write the information to the file
+                    f.write(f"Iter {idx}\n")
+                    f.write(f"{output_line}\n")
+                    f.write(f"{output_labels}\n")
+                    f.write(f"{output_session_labels}\n")
+                    f.write("\n")
+                ###############
+
+                for i in range(len(line) - window_size):
+                    if is_unsupervised:
+                        # get the index of the event in the window sequence
+                        label = vocab.get_event(line[i + window_size],
+                                                use_similar=quantitative)  # use_similar only for LogAnomaly
+
+                    seq = line[i: i + window_size]
+                    # NOTE testing
+                    # if i < 2 and idx < 1:
+                    # print(f"sliding window: seq: {seq}")
+                    # Get sequential patterns for all sequences in each log
+                    sequential_pattern = [vocab.get_event(
+                        event, use_similar=quantitative) for event in seq]
+                    semantic_pattern = None
+                    # print(f"sequential_pattern " + str(sequential_pattern) + "idx ", idx)
+                    if semantic:
+                        print("semantic")
+                        semantic_pattern = [
+                            vocab.get_embedding(event) for event in seq]
+                    quantitative_pattern = None
+                    if quantitative:
+                        print("quantitive")
+                        quantitative_pattern = [0] * len(vocab)
+                        log_counter = Counter(sequential_pattern)
+                        for key in log_counter:
+                            try:
+                                quantitative_pattern[key] = log_counter[key]
+                            except Exception as _:
+                                pass  # ignore unseen events or padding key
+
+                    sequence = {'nSec': i, 'sequential': sequential_pattern}
+                    if quantitative:
+                        sequence['quantitative'] = quantitative_pattern
+                    if semantic:
+                        sequence['semantic'] = semantic_pattern
+                    sequence['label'] = label
+                    sequence['idx'] = idx
+                    # NOTE testing
+                    # print(f"sequence: {sequence}")
+                    # if idx == len(data) - 1 and i == len(line) - window_size - 1:
+                    #     print(f"sequence of last session: {sequence}", "\n")
+                    #     print("vocab ", vocab.stoi, "\n")
+                    #     print("last session: length", len(
+                    #         data[-1][0]), "content", data[-1][0],  "\n")
+                    #     print("index and line length ", idx, len(line), "\n")
+                    #     print("label vocab get event ",
+                    #           vocab.get_event(line[i + window_size]), "\n")
+                    log_sequences.append(sequence)
+            sequentials, quantitatives, semantics = None, None, None
+            if sequential:
+                print("sequential \n")
+                sequentials = [seq['sequential'] for seq in log_sequences]
             if quantitative:
-                print("quantitive")
-                quantitative_pattern = [0] * len(vocab)
-                log_counter = Counter(sequential_pattern)
-                for key in log_counter:
-                    try:
-                        quantitative_pattern[key] = log_counter[key]
-                    except Exception as _:
-                        pass  # ignore unseen events or padding key
-
-            sequence = {'sequential': sequential_pattern}
-            if quantitative:
-                sequence['quantitative'] = quantitative_pattern
+                print("quantitative \n")
+                quantitatives = [seq['quantitative'] for seq in log_sequences]
             if semantic:
-                sequence['semantic'] = semantic_pattern
-            sequence['label'] = label
-            sequence['idx'] = idx
-            # NOTE testing
-            # print(f"sequence: {sequence}")
-            # if idx == len(data) - 1 and i == len(line) - window_size - 1:
-            #     print(f"sequence of last session: {sequence}", "\n")
-            #     print("vocab ", vocab.stoi, "\n")
-            #     print("last session: length", len(
-            #         data[-1][0]), "content", data[-1][0],  "\n")
-            #     print("index and line length ", idx, len(line), "\n")
-            #     print("label vocab get event ",
-            #           vocab.get_event(line[i + window_size]), "\n")
-            log_sequences.append(sequence)
+                print("semantic \n")
+                semantics = [seq['semantic'] for seq in log_sequences]
+            labels = [seq['label'] for seq in log_sequences]
+            sequence_idxs = [seq['idx'] for seq in log_sequences]
+            first_idx = [seq for seq in log_sequences if seq['idx'] == 0]
+            last_idx = [
+                seq for seq in log_sequences if seq['idx'] == len(data) - 1]
 
-    sequentials, quantitatives, semantics = None, None, None
-    if sequential:
-        print("sequential \n")
-        sequentials = [seq['sequential'] for seq in log_sequences]
-    if quantitative:
-        print("quantitative \n")
-        quantitatives = [seq['quantitative'] for seq in log_sequences]
-    if semantic:
-        print("semantic \n")
-        semantics = [seq['semantic'] for seq in log_sequences]
-    labels = [seq['label'] for seq in log_sequences]
-    sequence_idxs = [seq['idx'] for seq in log_sequences]
-    logger.info(f"Number of sequences: {len(labels)}")
-    if not is_unsupervised:
-        logger.info(f"Number of normal sequence: {len(labels) - sum(labels)}")
-        logger.info(f"Number of abnormal sequence: {sum(labels)}")
+            f.write(
+                f"Log sequences for first idx: {first_idx}\n\n")
+            f.write(
+                f"Log sequences for last idx: {last_idx}\n\n")
 
-    logger.warning(
-        f"Number of unique abnormal events: {len(unique_ab_events)}")
-    logger.info(
-        f"Number of abnormal sessions: {sum(session_labels.values())}/{len(session_labels)}")
+            logger.info(f"Number of sequences: {len(labels)}")
 
-    return sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels
+            # ? dont make sense to me
+            # logger.warning(
+            #     f"Number of unique abnormal events: {len(unique_ab_events)}")
+
+            logger.info(
+                f"Number of abnormal sessions: {sum(session_labels.values())}/{len(session_labels)}")
+        sys.stdout = sys.__stdout__
+
+        return sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels
+
+    else:
+        for idx, (templates, labels) in tqdm(enumerate(data), total=len(data),
+                                             desc=f"Sliding window with size {window_size}"):
+            line = list(templates)
+            line = line + [vocab.pad_token] * \
+                (window_size - len(line) + is_unsupervised)
+            if isinstance(labels, list):
+                labels = [0] * (window_size - len(labels) +
+                                is_unsupervised) + labels
+            session_labels[idx] = labels if isinstance(
+                labels, int) else max(labels)
+            for i in range(len(line) - window_size if is_unsupervised else len(line) - window_size + 1):
+                if is_unsupervised:
+                    label = vocab.get_event(line[i + window_size],
+                                            use_similar=quantitative)  # use_similar only for LogAnomaly
+                else:
+                    if not isinstance(labels, int):
+                        label = max(labels[i: i + window_size])
+                    else:
+                        label = labels
+                seq = line[i: i + window_size]
+                sequential_pattern = [vocab.get_event(
+                    event, use_similar=quantitative) for event in seq]
+                semantic_pattern = None
+                if semantic:
+                    semantic_pattern = [
+                        vocab.get_embedding(event) for event in seq]
+                quantitative_pattern = None
+                if quantitative:
+                    quantitative_pattern = [0] * len(vocab)
+                    log_counter = Counter(sequential_pattern)
+                    for key in log_counter:
+                        try:
+                            quantitative_pattern[key] = log_counter[key]
+                        except Exception as _:
+                            pass  # ignore unseen events or padding key
+
+                sequence = {'sequential': sequential_pattern}
+                if quantitative:
+                    sequence['quantitative'] = quantitative_pattern
+                if semantic:
+                    sequence['semantic'] = semantic_pattern
+                sequence['label'] = label
+                sequence['idx'] = idx
+                log_sequences.append(sequence)
+
+        sequentials, quantitatives, semantics = None, None, None
+        if sequential:
+            sequentials = [seq['sequential'] for seq in log_sequences]
+        if quantitative:
+            quantitatives = [seq['quantitative'] for seq in log_sequences]
+        if semantic:
+            semantics = [seq['semantic'] for seq in log_sequences]
+        labels = [seq['label'] for seq in log_sequences]
+        sequence_idxs = [seq['idx'] for seq in log_sequences]
+        logger.info(f"Number of sequences: {len(labels)}")
+        if not is_unsupervised:
+            logger.info(
+                f"Number of normal sequence: {len(labels) - sum(labels)}")
+            logger.info(f"Number of abnormal sequence: {sum(labels)}")
+
+        logger.warning(
+            f"Number of unique abnormal events: {len(unique_ab_events)}")
+        logger.info(
+            f"Number of abnormal sessions: {sum(session_labels.values())}/{len(session_labels)}")
+
+        return sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels
