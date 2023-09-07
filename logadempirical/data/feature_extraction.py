@@ -6,13 +6,12 @@ import numpy as np
 import sys
 
 
-def load_features(data_path, is_unsupervised=True, min_len=0, is_train=True):
+def load_features(data_path, min_len=0, is_train=True):
     """
     Load features from pickle file
     Parameters
     ----------
     data_path: str: Path to pickle file
-    is_unsupervised: bool: Whether the model is unsupervised or not
     min_len: int: Minimum length of log sequence
     pad_token: str: Padding token
     is_train: bool: Whether the data is training data or not
@@ -23,46 +22,28 @@ def load_features(data_path, is_unsupervised=True, min_len=0, is_train=True):
     with open(data_path, 'rb') as f:
         data = pickle.load(f)
 
-    # NOTE - copy the train data to a file
-    output_data_first_10 = [
-        f"Training data {i}: {log}" for i, log in enumerate(data[:10], start=1)]
-
-    output_data_last_10 = [
-        f"Training data {i}: {log}" for i, log in enumerate(data[len(data)-10:], start=len(data)-9)]
-
-    # with open("./testing/train_data_before_load_features.txt", "w") as f:
-    #     sys.stdout = f
-    #     print("Training data before load features: \n")
-    #     for item in output_data_first_10:
-    #         f.write("%s\n" % item)
-    #     for item in output_data_last_10:
-    #         f.write("%s\n" % item)
-    # sys.stdout = sys.__stdout__
-
     print(f"\nLoading features...")
 
     print(f"load features: train length: {len(data)}")
-    # for i, log in enumerate(data, start=1):
-    # print(f"load features: train data {i}: {log}")
+
     if is_train:
-        if is_unsupervised:
-            logs = []
-            no_abnormal = 0
-            # print(f"feature extraction: first log sequence {data[0]}")
-            for seq in data:
-                # NOTE only true when min_len > 0
-                if len(seq['EventTemplate']) < min_len:
-                    continue
-                if not isinstance(seq['Label'], int):
-                    label = max(seq['Label'])
-                else:
-                    label = seq['Label']
-                if label == 0:
-                    logs.append(
-                        (seq['EventTemplate'], label))
-                else:
-                    no_abnormal += 1
-            print("Number of abnormal sessions:", no_abnormal, "\n")
+        logs = []
+        no_abnormal = 0
+        # print(f"feature extraction: first log sequence {data[0]}")
+        for seq in data:
+            # NOTE only true when min_len > 0
+            if len(seq['EventTemplate']) < min_len:
+                continue
+            if not isinstance(seq['Label'], int):
+                label = max(seq['Label'])
+            else:
+                label = seq['Label']
+            if label == 0:
+                logs.append(
+                    (seq['EventTemplate'], label))
+            else:
+                no_abnormal += 1
+        print("Number of abnormal sessions:", no_abnormal, "\n")
     else:
         logs = []
         no_abnormal = 0
@@ -82,6 +63,26 @@ def load_features(data_path, is_unsupervised=True, min_len=0, is_train=True):
 
     # NOTE length is the length of each log sequence (window type) at position 0 (list of events), where each log is an array of [eventTemplate, label].
     # In a nutshell, it is the length of the log sequence
+    if is_train:
+      # NOTE - copy the train data to a file
+        output_data_first_10 = [
+            f"{i}: {log}" for i, log in enumerate(logs[:10], start=1)]
+
+        output_data_last_10 = [
+            f"{i}: {log}" for i, log in enumerate(logs[len(logs)-10:], start=len(logs)-9)]
+
+        with open("./testing/3_train_data_after_load_features.txt", "w") as f:
+            sys.stdout = f
+            print("Training data after load features: \nOnly normal labels\n")
+            for item in output_data_first_10:
+                f.write("%s\n" % item)
+            f.write("\n")
+            for item in output_data_last_10:
+                f.write("%s\n" % item)
+            logs_len = [len(log[0]) for log in logs]
+            f.write(
+                f"max: {max(logs_len)} min: {min(logs_len)} mean: {np.mean(logs_len)}\n")
+        sys.stdout = sys.__stdout__
     logs_len = [len(log[0]) for log in logs]
     return logs, {"min": min(logs_len), "max": max(logs_len), "mean": np.mean(logs_len)}
 
@@ -90,7 +91,6 @@ def sliding_window(data: List[Tuple[List[str], int]],
                    window_size: int = 40,
                    is_train: bool = True,
                    vocab: Optional[Any] = None,
-                   is_unsupervised: bool = True,
                    sequential: bool = False,
                    quantitative: bool = False,
                    semantic: bool = False,
@@ -104,7 +104,6 @@ def sliding_window(data: List[Tuple[List[str], int]],
     window_size: int: Size of sliding window
     is_train: bool: training mode or not
     vocab: Optional[Any]: Vocabulary
-    is_unsupervised: bool: Whether the model is unsupervised or not
     sequential: bool: Whether to use sequential features
     quantitative: bool: Whether to use quantitative features
     semantic: bool: Whether to use semantic features
@@ -122,20 +121,20 @@ def sliding_window(data: List[Tuple[List[str], int]],
 
     if is_train:
         # NOTE - copy the train data to a file
-        # print("Creating vocab_stoi.txt")
-        # with open("./testing/vocab_stoi.txt", "w") as f:
-        #     sys.stdout = f
-        #     for k, v in vocab.stoi.items():
-        #         print(k, v)
-        # sys.stdout = sys.__stdout__
-        with open("./testing/sequential_quantitives_semantics.txt", "w") as f:
+        print("Creating vocab_stoi.txt")
+        with open("./testing/vocab_stoi.txt", "w") as f:
+            sys.stdout = f
+            for k, v in vocab.stoi.items():
+                print(k, v)
+        sys.stdout = sys.__stdout__
+        with open("./testing/5_sequential_quantitives_semantics.txt", "w") as f:
             # for each log
             for idx, (templates, labels) in tqdm(enumerate(data), total=len(data),
                                                  desc=f"Sliding window with size {window_size}"):
                 line = list(templates)
                 # add n padding tokens to the end of the sequence if window size is different from the length of the sequence
                 line = line + [vocab.pad_token] * \
-                    (window_size - len(line) + is_unsupervised)
+                    (window_size - len(line) + 1)
 
                 # NOTE test padding
                 # if len(line) != len(list(templates)):
@@ -144,7 +143,7 @@ def sliding_window(data: List[Tuple[List[str], int]],
                 if isinstance(labels, list):
                     print("labels is a list")
                     labels = [0] * (window_size - len(labels) +
-                                    is_unsupervised) + labels
+                                    1) + labels
 
                 session_labels[idx] = labels if isinstance(
                     labels, int) else max(labels)
@@ -169,10 +168,9 @@ def sliding_window(data: List[Tuple[List[str], int]],
                 ###############
 
                 for i in range(len(line) - window_size):
-                    if is_unsupervised:
-                        # get the index of the event in the window sequence
-                        label = vocab.get_event(line[i + window_size],
-                                                use_similar=quantitative)  # use_similar only for LogAnomaly
+                    # get the index of the event in the window sequence
+                    label = vocab.get_event(line[i + window_size],
+                                            use_similar=quantitative)  # use_similar only for LogAnomaly
 
                     seq = line[i: i + window_size]
                     # NOTE testing
@@ -254,21 +252,16 @@ def sliding_window(data: List[Tuple[List[str], int]],
                                              desc=f"Sliding window with size {window_size}"):
             line = list(templates)
             line = line + [vocab.pad_token] * \
-                (window_size - len(line) + is_unsupervised)
+                (window_size - len(line) + 1)
             if isinstance(labels, list):
                 labels = [0] * (window_size - len(labels) +
-                                is_unsupervised) + labels
+                                1) + labels
             session_labels[idx] = labels if isinstance(
                 labels, int) else max(labels)
-            for i in range(len(line) - window_size if is_unsupervised else len(line) - window_size + 1):
-                if is_unsupervised:
-                    label = vocab.get_event(line[i + window_size],
-                                            use_similar=quantitative)  # use_similar only for LogAnomaly
-                else:
-                    if not isinstance(labels, int):
-                        label = max(labels[i: i + window_size])
-                    else:
-                        label = labels
+            for i in range(len(line) - window_size):
+                label = vocab.get_event(line[i + window_size],
+                                        use_similar=quantitative)  # use_similar only for LogAnomaly
+
                 seq = line[i: i + window_size]
                 sequential_pattern = [vocab.get_event(
                     event, use_similar=quantitative) for event in seq]
@@ -305,14 +298,10 @@ def sliding_window(data: List[Tuple[List[str], int]],
         labels = [seq['label'] for seq in log_sequences]
         sequence_idxs = [seq['idx'] for seq in log_sequences]
         logger.info(f"Number of sequences: {len(labels)}")
-        if not is_unsupervised:
-            logger.info(
-                f"Number of normal sequence: {len(labels) - sum(labels)}")
-            logger.info(f"Number of abnormal sequence: {sum(labels)}")
 
         logger.warning(
             f"Number of unique abnormal events: {len(unique_ab_events)}")
         logger.info(
-            f"Number of abnormal sessions: {sum(session_labels.values())}/{len(session_labels)}")
+            f"Number of abnormal sessions: {sum(session_labels.values())}/{len(session_labels)}\n")
 
         return sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels

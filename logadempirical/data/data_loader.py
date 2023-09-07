@@ -117,13 +117,14 @@ def process_dataset(logger: Logger,
         raise NotImplementedError(f"{grouping} is not implemented")
 
     # # NOTE
-    # with open("./testing/sessions_training_before_remove_anomalies_and_splitting.txt", "w") as f:
-    #     sys.stdout = f
-
-    #     for j, result in enumerate(train_window[:10]):
-    #         f.write(f"Index {j}: {result}\n")
-    #     for j, result in enumerate(train_window[len(train_window)-10:], start=len(train_window) - 10):
-    #         f.write(f"Index {j}: {result}\n")
+    with open("./testing/2_train_labeled_sessions_before_remove_anomalies_and_splitting.txt", "w") as f:
+        sys.stdout = f
+        f.write(f"Splited train data, these are saved on train and test pkl\n")
+        for j, result in enumerate(train_window[:10], start=1):
+            f.write(f"Index {j}: {result}\n")
+        f.write(f"\n")
+        for j, result in enumerate(train_window[-10:], start=len(train_window) - 9):
+            f.write(f"Index {j}: {result}\n")
 
     logger.info(
         f"Saving sessions at {output_dir}/train.pkl and {output_dir}/test.pkl\n")

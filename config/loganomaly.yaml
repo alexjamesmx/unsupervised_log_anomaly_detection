@@ -39,7 +39,7 @@ max_epoch: 20
 
 # common configuration
 output_dir: ./output/
-resume: false
+load: false
 step_size: 20
 train_size: 0.1
 valid_ratio: 0.1

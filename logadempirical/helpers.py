@@ -45,7 +45,7 @@ def arg_parser():
                         type=float, help="valid size")
 
     # model parameters
-    parser.add_argument("--resume", default=False, action='store_true')
+    parser.add_argument("--load", default=False, action='store_true')
     parser.add_argument("--train", default=False, action='store_true')
 
     # training parameters

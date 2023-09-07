@@ -11,7 +11,6 @@ import sys
 def session_window(raw_data, id_regex, label_dict, window_size=20):
     data_dict = {}  # defaultdict(list)
     raw_data = raw_data.to_dict("records")
-
     # look for uniques block ids in the row content ffor each row in the dataset (each row is a log)
     for idx, row in tqdm(enumerate(raw_data), total=len(raw_data)):
         blkId_list = re.findall(id_regex, row['Content'])
@@ -32,16 +31,16 @@ def session_window(raw_data, id_regex, label_dict, window_size=20):
         results.append({"SessionId": k, "EventId": v["EventId"], "EventTemplate": v["EventTemplate"],
                         "Content": v["Content"], "Label": label_dict[k]})
     results = shuffle(results)
-    # with open("./testing/sessions.txt", "w") as f:
-    #     sys.stdout = f
+    with open("./testing/1_total_labeled_sessions.txt", "w") as f:
+        sys.stdout = f
+        f.write("Group bby blkid, results are shuffled \n")
+        for j, result in enumerate(results[:10], start=1):
+            f.write(f"Index {j}: {result}\n")
+        f.write("\n")
+        for j, result in enumerate(results[-10:], start=len(results) - 9):
+            f.write(f"Index {j}: {result}\n")
 
-    #     for j, result in enumerate(results[:10]):
-    #         f.write(f"Index {j}: {result}\n")
-
-    #     for j, result in enumerate(results[len(results)-10:], start=len(results) - 10):
-    #         f.write(f"Index {j}: {result}\n")
-
-    # sys.stdout = sys.__stdout__
+    sys.stdout = sys.__stdout__
     return results
 
 
@@ -70,7 +69,6 @@ def session_window_bgl(raw_data):
         results.append({"SessionId": k, "EventId": v["EventId"], "EventTemplate": v["EventTemplate"],
                         "Content": v["Content"], "Label": label_dict[k]})
     results = shuffle(results)
-    print("there are %d sessions in this dataset" % len(results))
     return results
 
 
@@ -136,7 +134,6 @@ def time_sliding_window(raw_data, window_size=60, step_size=60):
         n_sess += 1
 
     assert len(start_end_index_pair) == len(new_data)
-    # print('there are %d instances (sliding windows) in this dataset\n' % len(start_end_index_pair))
     return new_data
 
 
@@ -173,7 +170,6 @@ def fixed_window(raw_data, window_size, step_size):
         n_sess += 1
 
     assert len(start_end_index_pair) == len(new_data)
-    # print('there are %d instances (sliding windows) in this dataset\n' % len(start_end_index_pair))
     return new_data
 
 

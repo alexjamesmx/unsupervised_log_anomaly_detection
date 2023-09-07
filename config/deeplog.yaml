@@ -8,7 +8,7 @@ embeddings: embeddings_average.json
 grouping: session
 session_level: entry
 sequential: true
-semantic: true
+semantic: false
 quantitative: false
 is_chronological: true
 history_size: 10
@@ -35,11 +35,11 @@ weight_decay: 0.0 # range: from 0.0 to 0.1
 # training configuration
 accumulation_step: 1 # range: from 1 to 10
 batch_size: 2048 # range: from 32 to 4096
-max_epoch: 15 # range: from 1 to 100
+max_epoch: 10 # range: from 1 to 100
 
 # common configuration
 output_dir: ./output/
-resume: false
+load: false
 step_size: 1
 train_size: 0.01
 valid_ratio: 0.1
@@ -87,7 +87,7 @@ train: true
 
 # # common configuration
 # output_dir: ./output/
-# resume: false
+# load: false
 # step_size: 1
 # train_size: 0.1
 # valid_ratio: 0.1

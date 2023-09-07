@@ -38,7 +38,6 @@ def build_vocab(vocab_path: str,
                 train_path: str,
                 embeddings: str,
                 embedding_dim: int = 300,
-                is_unsupervised: bool = False,
                 logger: Logger = getLogger("__name__")) -> Vocab:
     """
     Build vocab from training data
@@ -49,7 +48,6 @@ def build_vocab(vocab_path: str,
     train_path: str: Path to training data
     embeddings: str: Path to pretrained embeddings
     embedding_dim: int: Dimension of embeddings
-    is_unsupervised: bool: Whether the model is unsupervised or not
     logger: Logger: Logger
 
     Returns
@@ -120,7 +118,6 @@ def train_and_eval(args: argparse.Namespace,
                    test_path: str,
                    vocab: Vocab,
                    model: torch.nn.Module,
-                   is_unsupervised=False,
                    logger: Logger = getLogger("__name__")) -> Tuple[float, float, float, float]:
     """
     Run model
@@ -131,7 +128,6 @@ def train_and_eval(args: argparse.Namespace,
     test_path: str: Path to test data
     vocab: Vocab: Vocabulary
     model: torch.nn.Module: Model
-    is_unsupervised: bool: Whether the model is unsupervised or not
     logger: Logger: Logger
 
     Returns
@@ -139,7 +135,6 @@ def train_and_eval(args: argparse.Namespace,
     Accuracy metrics
     """
     data, stat = load_features(train_path,
-                               is_unsupervised=is_unsupervised,
                                is_train=True)
 
     logger.info(f"Main: log sequences statistics: {stat}")
@@ -152,37 +147,38 @@ def train_and_eval(args: argparse.Namespace,
         f"Main: ,training, valid size: {len(train_data)}, {str(n_valid)} where valid ratio is {args.valid_ratio}")
 
     # NOTE - copy the train data to a file
-    # output_data_first = [
-    #     f"Index {i}: {log}" for i, log in enumerate(train_data[:10], start=1)]
+    output_data_first = [
+        f"Index {i}: {log}" for i, log in enumerate(train_data[:10], start=1)]
 
-    # output_data_last = [
-    # f"Index {i}: {log}" for i, log in enumerate(train_data[len(train_data)-10:], start=len(train_data)-9)]
+    output_data_last = [
+        f"Index {i}: {log}" for i, log in enumerate(train_data[len(train_data)-10:], start=len(train_data)-9)]
 
-    # with open("./testing/sessions_training_before_sliding_windows.txt", "w") as f:
-    #     sys.stdout = f
-    #     for item in output_data_first:
-    #         f.write("%s\n" % item)
-    #     for item in output_data_last:
-    #         f.write("%s\n" % item)
-    # sys.stdout = sys.__stdout__
-    ################
+    with open("./testing/4_sessions_training_before_sliding_windows.txt", "w") as f:
+        sys.stdout = f
+        for item in output_data_first:
+            f.write("%s\n" % item)
+        for item in output_data_last:
+            f.write("%s\n" % item)
+    sys.stdout = sys.__stdout__
+    ###############
+
     # build train dataset
+    print("\nBuilding train dataset\n")
     sequentials, quantitatives, semantics, labels, idxs, _ = sliding_window(
         train_data,
         vocab=vocab,
         window_size=args.history_size,
-        # NOTE Testint is_Train = True
-        is_train=False,
+        is_train=True,
         semantic=args.semantic,
         quantitative=args.quantitative,
         sequential=args.sequential,
-        is_unsupervised=is_unsupervised,
         logger=logger
     )
 
     train_dataset = LogDataset(
         sequentials, quantitatives, semantics, labels, idxs)
     # build valid dataset
+    print("\nBuilding valid dataset\n")
     sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels = sliding_window(
         valid_data,
         vocab=vocab,
@@ -191,21 +187,19 @@ def train_and_eval(args: argparse.Namespace,
         semantic=args.semantic,
         quantitative=args.quantitative,
         sequential=args.sequential,
-        is_unsupervised=is_unsupervised,
         logger=logger
     )
     valid_dataset = LogDataset(
         sequentials, quantitatives, semantics, labels, sequence_idxs)
-    logger.info(f"Train dataset: {len(train_dataset)}")
-    logger.info(f"Valid dataset: {len(valid_dataset)}")
-    print(f"Model parameters: {model.parameters()}")
+    logger.info(
+        f"Train dataset: {len(train_dataset)}, Valid dataset: {len(valid_dataset)}")
     optimizer = get_optimizer(args, model.parameters())
-
     device = accelerator.device
     model = model.to(device)
 
     # start training
     logger.info(f"Start training {args.model_name} model on {device} device")
+    print(model)
 
     trainer = Trainer(
         model,
@@ -223,13 +217,13 @@ def train_and_eval(args: argparse.Namespace,
         num_classes=len(vocab),
     )
     # load model if resuming
-    if args.resume and os.path.exists(f"{args.output_dir}/models/{args.model_name}.pt"):
+    if args.load and not args.train and os.path.exists(f"{args.output_dir}/models/{args.model_name}.pt"):
         logger.info(
             f"Loading model from {args.output_dir}/models/{args.model_name}.pt...")
         trainer.load_model(f"{args.output_dir}/models/{args.model_name}.pt")
 
     # save model if training
-    if args.train:
+    if args.train and not args.load:
         train_loss, val_loss, val_acc, args.topk = trainer.train(device=device,
                                                                  save_dir=f"{args.output_dir}/models",
                                                                  model_name=args.model_name,
@@ -245,50 +239,47 @@ def train_and_eval(args: argparse.Namespace,
     logger.info(
         f"Validation Result:: Acc: {acc:.4f}, Top-{args.topk} Recommendation: {recommend_topk}")
     # now load test data
-    print("Loading test dataset\n")
-    data, stat = load_features(test_path,
-                               is_unsupervised=is_unsupervised,
-                               is_train=False)
-    logger.info(f"Test data statistics: {stat}")
-    label_dict = {}
-    counter = {}
-    for (s, l) in data:
-        label_dict[tuple(s)] = l
-        try:
-            counter[tuple(s)] += 1
-        except Exception:
-            counter[tuple(s)] = 1
-    data = [(list(k), v) for k, v in label_dict.items()]
+    # print("Loading test dataset\n")
+    # data, stat = load_features(test_path,
+    #                            is_train=False)
+    # logger.info(f"Test data statistics: {stat}")
+    # label_dict = {}
+    # counter = {}
+    # for (s, l) in data:
+    #     label_dict[tuple(s)] = l
+    #     try:
+    #         counter[tuple(s)] += 1
+    #     except Exception:
+    #         counter[tuple(s)] = 1
+    # data = [(list(k), v) for k, v in label_dict.items()]
 
-    num_sessions = [counter[tuple(k)] for k, _ in data]
-    sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels = sliding_window(
-        data,
-        vocab=vocab,
-        window_size=args.history_size,
-        is_train=False,
-        semantic=args.semantic,
-        quantitative=args.quantitative,
-        sequential=args.sequential,
-        is_unsupervised=is_unsupervised,
-        logger=logger
-    )
+    # num_sessions = [counter[tuple(k)] for k, _ in data]
+    # sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels = sliding_window(
+    #     data,
+    #     vocab=vocab,
+    #     window_size=args.history_size,
+    #     is_train=False,
+    #     semantic=args.semantic,
+    #     quantitative=args.quantitative,
+    #     sequential=args.sequential,
+    #     logger=logger
+    # )
 
-    test_dataset = LogDataset(
-        sequentials, quantitatives, semantics, labels, sequence_idxs)
-    logger.info(f"Test dataset: {len(test_dataset)}")
-    if is_unsupervised:
-        logger.info(
-            f"Start predicting {args.model_name} model on {device} device with top-{args.topk} recommendation")
-        acc, f1, pre, rec = trainer.predict_unsupervised(test_dataset,
-                                                         session_labels,
-                                                         topk=args.topk,
-                                                         device=device,
-                                                         is_valid=False,
-                                                         num_sessions=num_sessions)
+    # test_dataset = LogDataset(
+    #     sequentials, quantitatives, semantics, labels, sequence_idxs)
+    # logger.info(f"Test dataset: {len(test_dataset)}")
+    # logger.info(
+    #     f"Start predicting {args.model_name} model on {device} device with top-{args.topk} recommendation")
+    # acc, f1, pre, rec = trainer.predict_unsupervised(test_dataset,
+    #                                                  session_labels,
+    #                                                  topk=args.topk,
+    #                                                  device=device,
+    #                                                  is_valid=False,
+    #                                                  num_sessions=num_sessions)
 
-    logger.info(
-        f"Test Result:: Acc: {acc:.4f}, Precision: {pre:.4f}, Recall: {rec:.4f}, F1: {f1:.4f}")
-    return acc, f1, pre, rec
+    # logger.info(
+    #     f"Test Result:: Acc: {acc:.4f}, Precision: {pre:.4f}, Recall: {rec:.4f}, F1: {f1:.4f}")
+    # return acc, f1, pre, rec
 
 
 def run(args):
@@ -320,15 +311,12 @@ def run(args):
     # create output directories for vocabs
     os.makedirs(f"{args.output_dir}/vocabs", exist_ok=True)
     vocab_path = f"{args.output_dir}/vocabs/{args.model_name}.pkl"
-    # is model unsupervised
-    is_unsupervised = args.model_name in ["LogAnomaly", "DeepLog"]
     # build vocab
     log_vocab = build_vocab(vocab_path,
                             args.data_dir,
                             train_path,
                             args.embeddings,
                             embedding_dim=args.embedding_dim,
-                            is_unsupervised=is_unsupervised,
                             logger=logger)
     # NOTE am here build model, and embeddings yet to analyze
 
@@ -339,7 +327,6 @@ def run(args):
                    test_path,
                    log_vocab,
                    model,
-                   is_unsupervised=is_unsupervised,
                    logger=logger)
 
 
@@ -348,7 +335,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.config_file is not None and os.path.exists(args.config_file):
         config_file = args.config_file
-
         with open(config_file, "r") as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
             config_args = argparse.Namespace(**config)

@@ -117,6 +117,7 @@ class Trainer:
         total_train_loss = 0
         total_val_loss = 0
         total_val_acc = 0
+
         for epoch in range(self.no_epochs):
             train_loss = self._train_epoch(
                 train_loader, device, self.scheduler, progress_bar)
