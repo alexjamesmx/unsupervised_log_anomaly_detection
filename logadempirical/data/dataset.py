@@ -6,7 +6,7 @@ from torch.utils.data import Dataset
 
 
 class LogDataset(Dataset):
-    def __init__(self, sequentials=None, quantitatives=None, semantics=None, labels=None, idxs=None):
+    def __init__(self, sequentials=None, quantitatives=None, semantics=None, labels=None, idxs=None, eventIds=None):
         if sequentials is None and quantitatives is None and semantics is None:
             raise ValueError('Provide at least one feature type')
         self.sequentials = sequentials
@@ -14,6 +14,7 @@ class LogDataset(Dataset):
         self.semantics = semantics
         self.labels = labels
         self.idxs = idxs
+        self.eventIds = eventIds
 
     def __len__(self):
         return len(self.labels)

@@ -42,6 +42,7 @@ class Vocab(object):
         return len(self.itos)
 
     def get_event(self, real_event, use_similar=False):
+        # print(self.stoi)
         # print("real event: ", real_event)
         event = self.stoi.get(real_event, self.unk_index)
         if not use_similar or event != self.unk_index:

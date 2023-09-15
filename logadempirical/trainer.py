@@ -9,6 +9,7 @@ from typing import Any, Optional, List, Union, Tuple
 import logging
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score, top_k_accuracy_score
 from itertools import chain
+# from logadempirical.data.vocab import Vocab
 
 
 class Trainer:
@@ -80,8 +81,10 @@ class Trainer:
             losses.append(loss.item())
             label = self.accelerator.gather(batch['label'])
             y_true.append(label.detach().clone().cpu().numpy())
+        # concatenate because there are arrays of arrays
         y_pred = np.concatenate(y_pred)
         y_true = np.concatenate(y_true)
+
         loss = np.mean(losses)
         if topk > 1:
             for k in range(1, self.num_classes + 1):
@@ -138,23 +141,30 @@ class Trainer:
             f"Train top-{topk}: {train_k}, Valid top-{topk}: {valid_k}")
         self.save_model(save_dir, model_name)
         return total_train_loss / self.no_epochs, val_loss, val_acc, max(train_k, valid_k)
+        # return total_train_loss / self.no_epochs, val_loss, val_acc, topk
 
     def predict_unsupervised(self,
                              dataset,
-                             y_true, topk: int,
+                             y_true,
+                             topk: int,
                              device: str = 'cpu',
                              is_valid: bool = False,
-                             num_sessions: Optional[List[int]] = None
+                             num_sessions: Optional[List[int]] = None,
                              ) -> Union[Tuple[float, float, float, float], Tuple[float, int]]:
         def find_topk(dataloader):
             y_topk = []
+            torch.set_printoptions(threshold=torch.inf)
             for batch in dataloader:
                 # batch = {k: v.to(device) for k, v in batch.items()}
                 label = self.accelerator.gather(batch['label'])
+
                 with torch.no_grad():
+                    # here not using topk because we want to find the position of the label in the sorted array
                     y_prob = self.model.predict(batch, device=device)
-                y_pred = torch.argsort(y_prob, dim=1, descending=True)[:, :]
+
+                y_pred = torch.argsort(y_prob, dim=1, descending=True)
                 y_pos = torch.where(y_pred == label.unsqueeze(1))[1] + 1
+
                 y_topk.extend(y_pos.cpu().numpy().tolist())
             return int(np.ceil(np.percentile(y_topk, 0.99)))
 
@@ -167,7 +177,6 @@ class Trainer:
         if is_valid:
             acc, _, _, _ = self.predict_unsupervised_helper(
                 test_loader, y_true, topk, device)
-            self.logger.info(find_topk(test_loader))
             return acc, find_topk(test_loader)
         else:
             return self.predict_unsupervised_helper(test_loader, y_true, topk, device, num_sessions)
@@ -178,20 +187,29 @@ class Trainer:
         progress_bar = tqdm(total=len(test_loader), desc=f"Predict",
                             disable=not self.accelerator.is_local_main_process)
         for batch in test_loader:
+
             idxs = self.accelerator.gather(
                 batch['idx']).detach().clone().cpu().numpy().tolist()
             support_label = (batch['sequential'] >=
                              self.num_classes).any(dim=1)
+
             support_label = self.accelerator.gather(
                 support_label).cpu().numpy().tolist()
             batch_label = self.accelerator.gather(
                 batch['label']).cpu().numpy().tolist()
             del batch['idx']
+
             with torch.no_grad():
                 y = self.accelerator.unwrap_model(self.model).predict_class(
                     batch, top_k=topk, device=device)
             y = self.accelerator.gather(y).cpu().numpy().tolist()
+            # idxs is a list of indices representing sessions or sequences.
+            # y is a list of lists containing the top-k predicted labels for each batch.
+            # batch_label is a list that contains the next event label for each batch.
+            # support_label is a list of Boolean values indicating whether each batch contains an unknown event.
+
             for idx, y_i, label_i, s_label in zip(idxs, y, batch_label, support_label):
+                # if the ground truth label is not among the top-k predicted labels for that session or if the session contains an unknown event then the session is labeled as an anomaly
                 y_pred[idx] = y_pred[idx] | (label_i not in y_i or s_label)
             progress_bar.update(1)
         progress_bar.close()
@@ -207,6 +225,9 @@ class Trainer:
         else:
             y_pred = np.array([y_pred[idx] for idx in idxs])
             y_true = np.array([y_true[idx] for idx in idxs])
+
+        # print("y pred ", y_pred)
+
         acc = accuracy_score(y_true, y_pred)
         f1 = f1_score(y_true, y_pred)
         pre = precision_score(y_true, y_pred)

@@ -46,7 +46,7 @@ class DeepLog(nn.Module):
         loss = None
         if y is not None and self.criterion is not None:
             loss = self.criterion(logits, y.view(-1).to(device))
-
+        # print(  f"x shape: {x.shape}, x each element shape: {x[0][0].shape}, logits shape: {logits.shape}, probabilities shape: {probabilities.shape}, loss shape: {loss}")
         return ModelOutput(logits=logits, probabilities=probabilities, loss=loss, embeddings=out[:, -1, :])
 
     def save(self, path):
@@ -61,6 +61,15 @@ class DeepLog(nn.Module):
 
     def predict_class(self, src, top_k=1, device="cpu"):
         del src['label']
+        # NOTE
+        # where original tensor or probabilities is a tensor of shape (batch_size, vocab_size)
+        # values, indices = torch.topk(self.forward(
+        #     src, device=device).probabilities, k=top_k, dim=1)
+        # print(
+        #     f" original tensor : {self.forward(src, device=device).probabilities.shape}")
+        # print(f"values with top k : {top_k}, {values}")
+        # print("indices: ", indices)
+
         return torch.topk(self.forward(src, device=device).probabilities, k=top_k, dim=1).indices
 
 

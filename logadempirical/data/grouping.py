@@ -31,16 +31,6 @@ def session_window(raw_data, id_regex, label_dict, window_size=20):
         results.append({"SessionId": k, "EventId": v["EventId"], "EventTemplate": v["EventTemplate"],
                         "Content": v["Content"], "Label": label_dict[k]})
     results = shuffle(results)
-    with open("./testing/1_total_labeled_sessions.txt", "w") as f:
-        sys.stdout = f
-        f.write("Group bby blkid, results are shuffled \n")
-        for j, result in enumerate(results[:10], start=1):
-            f.write(f"Index {j}: {result}\n")
-        f.write("\n")
-        for j, result in enumerate(results[-10:], start=len(results) - 9):
-            f.write(f"Index {j}: {result}\n")
-
-    sys.stdout = sys.__stdout__
     return results
 
 

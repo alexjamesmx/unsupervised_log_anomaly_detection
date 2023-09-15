@@ -22,30 +22,23 @@ num_layers: 2 # number of layers: from 1 to 8
 topk: 9 # keep defa`ult
 
 # optimizer configuration
-optimizer: adamw
-adam_beta1: 0.9 # range: from 0.0 to 1.0
-adam_beta2: 0.999 # range: from 0.0 to 1.0
-epsilon: 1.0e-08 # range: from 1.0e-08 to 1.0e-06
-lr: 0.001 # range: from 1e-05 to 1e-02
-optim_momentum: 0.99 # range: from 0.0 to 1.0
 scheduler: linear
 warmup_rate: 0.1 # range: from 0.01 to 0.2
-weight_decay: 0.0 # range: from 0.0 to 0.1
 
 # training configuration
 accumulation_step: 1 # range: from 1 to 10
 batch_size: 2048 # range: from 32 to 4096
-max_epoch: 10 # range: from 1 to 100
+max_epoch: 15 # range: from 1 to 100
 
 # common configuration
 output_dir: ./output/
-load: false
 step_size: 1
 train_size: 0.01
 valid_ratio: 0.1
-window_size: 20
-train: true
-# # dataset configuration
+window_size: 10
+load: true
+train: false
+# dataset configuration
 # data_dir: ./dataset/BGL
 # output_dir: ./output/
 # dataset_name: BGL
@@ -67,18 +60,12 @@ train: true
 # dropout: 0.1 # dropout rate: from 0.0 to 0.5
 # hidden_size: 128 # hidden size: from 32 to 1024
 # num_layers: 2 # number of layers: from 1 to 8
-# topk: 10 # keep default
+# topk: 9 # keep default
 
 # # optimizer configuration
 # optimizer: adamw
-# adam_beta1: 0.9 # range: from 0.0 to 1.0
-# adam_beta2: 0.999 # range: from 0.0 to 1.0
-# epsilon: 1.0e-08 # range: from 1.0e-08 to 1.0e-06
-# lr: 0.001 # range: from 1e-05 to 1e-02
-# optim_momentum: 0.99 # range: from 0.0 to 1.0
 # scheduler: linear
 # warmup_rate: 0.1 # range: from 0.01 to 0.2
-# weight_decay: 0.0 # range: from 0.0 to 0.1
 
 # # training configuration
 # accumulation_step: 1 # range: from 1 to 10
@@ -91,5 +78,5 @@ train: true
 # step_size: 1
 # train_size: 0.1
 # valid_ratio: 0.1
-# window_size: 20
+# window_size: 10
 # train: true

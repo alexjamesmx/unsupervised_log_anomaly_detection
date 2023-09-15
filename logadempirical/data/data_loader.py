@@ -6,6 +6,7 @@ from sklearn.utils import shuffle
 from logging import Logger
 from typing import List, Tuple
 import sys
+from logadempirical.data.log import Log
 
 
 def process_dataset(logger: Logger,
@@ -18,7 +19,9 @@ def process_dataset(logger: Logger,
                     step_size: int,
                     train_size: float,
                     is_chronological: bool = False,
-                    session_type: str = "entry") -> Tuple[str, str]:
+                    session_type: str = "entry",
+                    log: Log = None
+                    ) -> Tuple[str, str]:
     """
     creating log sequences by sliding window
     :param logger:
@@ -35,7 +38,6 @@ def process_dataset(logger: Logger,
     :return:
     """
 
-    # if train and test files exist, load them otherwise create them
     if os.path.exists(os.path.join(output_dir, "train.pkl")) and os.path.exists(os.path.join(output_dir, "test.pkl")):
         logger.info(
             f"Loading {output_dir}/train.pkl and {output_dir}/test.pkl")
@@ -47,7 +49,6 @@ def process_dataset(logger: Logger,
 
     logger.info(f"process dataset: Grouping: {grouping}")
     logger.info(f"process dataset: unlabeled size: {len(df)}")
-    # build log sequences
     if grouping == "sliding":
         df["Label"] = df["Label"].apply(lambda x: int(x != "-"))
         n_train = int(len(df) * train_size)
@@ -100,8 +101,6 @@ def process_dataset(logger: Logger,
                 f"process dataset: window_df (sessions) size {len(window_df)}, train_size {train_size}, n_train: {len(window_df) * train_size}")
             train_window = window_df[:n_train]
             test_window = window_df[n_train:]
-            logger.info(
-                f"process dataset: train_window and test_window sizes: {len(train_window)}, {len(test_window)}")
         elif dataset_name == "BGL":
             # df["NodeId"] = df["Node"].apply(lambda x: str(x).split(":")[0])
             # window df
@@ -115,16 +114,6 @@ def process_dataset(logger: Logger,
                 f"{dataset_name} with {grouping} is not implemented")
     else:
         raise NotImplementedError(f"{grouping} is not implemented")
-
-    # # NOTE
-    with open("./testing/2_train_labeled_sessions_before_remove_anomalies_and_splitting.txt", "w") as f:
-        sys.stdout = f
-        f.write(f"Splited train data, these are saved on train and test pkl\n")
-        for j, result in enumerate(train_window[:10], start=1):
-            f.write(f"Index {j}: {result}\n")
-        f.write(f"\n")
-        for j, result in enumerate(train_window[-10:], start=len(train_window) - 9):
-            f.write(f"Index {j}: {result}\n")
 
     logger.info(
         f"Saving sessions at {output_dir}/train.pkl and {output_dir}/test.pkl\n")
