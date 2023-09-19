@@ -10,9 +10,7 @@ from typing import Tuple
 
 from logadempirical.data.data_loader import process_dataset
 from logadempirical.data.vocab import Vocab
-from logadempirical.data.feature_extraction import load_features, sliding_window
-from logadempirical.data.dataset import LogDataset
-from logadempirical.helpers import arg_parser, get_optimizer
+from logadempirical.helpers import get_optimizer
 from logadempirical.models import get_model, ModelConfig
 from logadempirical.trainer import Trainer
 from logadempirical.data.log import Log
@@ -59,7 +57,7 @@ def build_vocab(vocab_path: str,
     return vocab
 
 
-def build_model(args, vocab_size):
+def build_model(args: argparse.Namespace, vocab_size: int) -> torch.nn.Module:
     """
     Build model
     Parameters
@@ -200,7 +198,6 @@ def eval(args: argparse.Namespace,
     storeLog.get_train_sliding_window(length=True)
     storeLog.get_valid_sliding_window(length=True)
     storeLog.get_test_sliding_window(length=True)
-    # START PREDICTING
     logger.info(
         f"Start predicting {args.model_name} model on {device} device with top-{args.topk} recommendation")
     acc, f1, pre, rec = trainer.predict_unsupervised(test_dataset,
@@ -219,7 +216,19 @@ def eval(args: argparse.Namespace,
 
 
 def run_eval(args, accelerator, logger):
-    print("run_eval")
+    """
+    Load and evaluate a pre-trained model for log anomaly detection.
+
+    Parameters
+    ----------
+    args (argparse.Namespace): Command-line arguments and configuration.
+    accelerator (Accelerator): Hardware accelerator for training.
+    logger (Logger): Logger for recording log messages.
+
+    Returns
+    ----------
+    None
+    """
     if args.grouping == "sliding":
         args.output_dir = f"{args.output_dir}{args.dataset_name}/sliding/W{args.window_size}_S{args.step_size}_C{args.is_chronological}_train{args.train_size}"
 

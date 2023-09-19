@@ -26,7 +26,7 @@ def preprocess_data(path: str,
             valid_data))
         return train_data, valid_data
     else:
-        test_data = data[:500]
+        test_data = data
         storeLog.set_test_data(test_data)
         storeLog.set_lengths(test_length=len(test_data))
         label_dict = {}
