@@ -21,9 +21,14 @@ from logadempirical.helpers import arg_parser, get_optimizer
 from logadempirical.models import get_model, ModelConfig
 from logadempirical.trainer import Trainer
 from logadempirical.data.log import Log
+from logadempirical.data.preprocess import preprocess_data, preprocess_slidings
 
 
 def build_vocab(vocab_path: str,
+                data_dir: str,
+                train_path: str,
+                embeddings: str,
+                embedding_dim: int = 300,
                 logger: Logger = getLogger("__name__")) -> Vocab:
     """
     Build vocab from training data
@@ -40,12 +45,22 @@ def build_vocab(vocab_path: str,
     -------
     vocab: Vocab: Vocabulary
     """
-    if os.path.exists(vocab_path):
+    if not os.path.exists(vocab_path):
+        with open(train_path, 'rb') as f:
+            data = pickle.load(f)
+        logs = [x['EventTemplate']
+                for x in data if np.max(x['Label']) == 0]
+        logger.info(f"Lenght of logs eventTemplate: {len(logs)}")
+        vocab = Vocab(logs, os.path.join(data_dir, embeddings),
+                      embedding_dim=embedding_dim)
+        logger.info(f"Save vocab in {vocab_path}")
+        logger.info(f"Vocab size: {len(vocab)}")
+        vocab.save_vocab(vocab_path)
+    else:
         vocab = Vocab.load_vocab(vocab_path)
         logger.info(f"Load vocab from {vocab_path}")
         logger.info(f"Vocab size: {len(vocab)}")
-    else:
-        raise FileNotFoundError(f"Vocab file {vocab_path} not found")
+
     return vocab
 
 
@@ -86,15 +101,15 @@ def build_model(args, vocab_size):
     return model
 
 
-def train_and_eval(args: argparse.Namespace,
-                   train_path: str,
-                   test_path: str,
-                   vocab: Vocab,
-                   model: torch.nn.Module,
-                   log: Log,
-                   logger: Logger = getLogger("__name__"),
-                   accelerator: Accelerator = Accelerator()
-                   ) -> Tuple[float, float, float, float]:
+def eval(args: argparse.Namespace,
+         train_path: str,
+         test_path: str,
+         vocab: Vocab,
+         model: torch.nn.Module,
+         log: Log,
+         logger: Logger = getLogger("__name__"),
+         accelerator: Accelerator = Accelerator()
+         ) -> Tuple[float, float, float, float]:
     """
     Run model
     Parameters
@@ -110,51 +125,28 @@ def train_and_eval(args: argparse.Namespace,
     -------
     Accuracy metrics
     """
-    data, stat = load_features(train_path,
-                               is_train=True)
-
-    logger.info(f"Main: Train log sequences statistics: {stat}")
-    data = shuffle(data)
-    n_valid = int(len(data) * args.valid_ratio)
-    train_data, valid_data = data[:-n_valid], data[-n_valid:]
-    log.set_train_data(train_data)
-
-    sequentials, quantitatives, semantics, labels, idxs, _ = sliding_window(
-        train_data,
-        vocab=vocab,
-        window_size=args.history_size,
+    # Preprocess training data
+    train_data, valid_data = preprocess_data(
+        path=train_path,
+        args=args,
         is_train=True,
-        semantic=args.semantic,
-        quantitative=args.quantitative,
-        sequential=args.sequential,
+        log=log,
+        logger=logger)
+
+    train_dataset, valid_dataset = preprocess_slidings(
+        train_data=train_data,
+        valid_data=valid_data,
+        vocab=vocab,
+        args=args,
+        is_train=True,
+        log=log,
         logger=logger,
     )
-    log.set_train_sliding_window(sequentials, quantitatives,
-                                 semantics, labels, idxs)
 
-    train_dataset = LogDataset(
-        sequentials, quantitatives, semantics, labels, idxs)
-    sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels = sliding_window(
-        valid_data,
-        vocab=vocab,
-        window_size=args.history_size,
-        is_train=True,
-        semantic=args.semantic,
-        quantitative=args.quantitative,
-        sequential=args.sequential,
-        logger=logger
-    )
-    log.set_valid_sliding_window(sequentials, quantitatives,
-                                 semantics, labels, sequence_idxs, session_labels)
-    valid_dataset = LogDataset(
-        sequentials, quantitatives, semantics, labels, sequence_idxs)
-
+    # Build model
     optimizer = get_optimizer(args, model.parameters())
     device = accelerator.device
     model = model.to(device)
-
-    logger.info(f"Start training {args.model_name} model on {device} device")
-    logger.info(f"{model}\n")
 
     trainer = Trainer(
         model,
@@ -171,11 +163,16 @@ def train_and_eval(args: argparse.Namespace,
         accelerator=accelerator,
         num_classes=len(vocab),
     )
+
     logger.info(
-        f"Loading model from {args.output_dir}/models/{args.model_name}.pt\n")
+        f"Loading model from {args.output_dir}/models/{args.model_name}.pt")
+    logger.info(f"{model}\n")
 
     trainer.load_model(f"{args.output_dir}/models/{args.model_name}.pt")
 
+    session_labels = valid_dataset.get_session_labels()
+
+    # Recommend top-k
     acc, recommend_topk = trainer.predict_unsupervised(valid_dataset,
                                                        session_labels,
                                                        topk=args.topk,
@@ -184,14 +181,7 @@ def train_and_eval(args: argparse.Namespace,
     logger.info(
         f"Validation Result:: Acc: {acc:.4f}, Top-{args.topk} Recommendation: {recommend_topk}")
 
-    # now load test data
-    test_data, stat = load_features(test_path,
-                                    is_train=False)
-
-    test_data = test_data[:1000]
-    log.set_test_data(test_data)
-    train_loss = None
-    if args.update:
+    if args.is_update:
         print("Updating model")
         false_positive_data = log.get_test_data(
             blockId="blk_-41265708926987771")
@@ -216,44 +206,29 @@ def train_and_eval(args: argparse.Namespace,
                                                                 model_name=args.model_name,
                                                                 topk=args.topk)
         logger.info(f"UPDATED MODEL Train Loss: {train_loss:.4f}")
-
-    label_dict = {}
-    counter = {}
-    for (e, s, l) in test_data:
-        key = tuple(s)
-        label_dict[key] = [e, l]
-        try:
-            counter[key] += 1
-        except Exception:
-            counter[key] = 1
-    test_data = [(list(k), v) for k, v in label_dict.items()]
-    test_data = [(list(k), v) for k, v in test_data if v[1] == 1]
-    print("REAL ANOMALIES HERE: ", len(test_data))
-    num_sessions = [counter[tuple(k)] for k, _ in test_data]
-    sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels, eventIds = sliding_window(
-        test_data,
-        vocab=vocab,
-        window_size=args.history_size,
+    #  preprocess test data
+    test_data, num_sessions = preprocess_data(
+        path=test_path,
+        args=args,
         is_train=False,
-        semantic=args.semantic,
-        quantitative=args.quantitative,
-        sequential=args.sequential,
-        logger=logger
+        log=log,
+        logger=logger)
+
+    train_loss = None
+
+    test_dataset, eventIds = preprocess_slidings(
+        test_data=test_data,
+        vocab=vocab,
+        args=args,
+        is_train=False,
+        log=log,
+        logger=logger,
     )
 
-    log.set_valid_data(valid_data)
-    log.set_lengths(len(train_data), len(valid_data), len(test_data))
-
-    log.set_test_sliding_window(sequentials, quantitatives,
-                                semantics, labels, sequence_idxs, session_labels, eventIds)
     log.get_lenths()
     log.get_train_sliding_window(length=True)
     log.get_valid_sliding_window(length=True)
     log.get_test_sliding_window(length=True)
-
-    test_dataset = LogDataset(
-        sequentials, quantitatives, semantics, labels, sequence_idxs)
-
     # START PREDICTING
     logger.info(
         f"Start predicting {args.model_name} model on {device} device with top-{args.topk} recommendation")
@@ -292,14 +267,18 @@ def run_load(args, accelerator, logger):
     os.makedirs(f"{args.output_dir}/vocabs", exist_ok=True)
     vocab_path = f"{args.output_dir}/vocabs/{args.model_name}.pkl"
 
-    log_vocab = build_vocab(vocab_path, logger=logger)
-
+    log_vocab = build_vocab(vocab_path,
+                            args.data_dir,
+                            train_path,
+                            args.embeddings,
+                            embedding_dim=args.embedding_dim,
+                            logger=logger)
     model = build_model(args, vocab_size=len(log_vocab))
-    train_and_eval(args,
-                   train_path,
-                   test_path,
-                   log_vocab,
-                   model,
-                   log,
-                   logger=logger,
-                   accelerator=accelerator)
+    eval(args,
+         train_path,
+         test_path,
+         log_vocab,
+         model,
+         log,
+         logger=logger,
+         accelerator=accelerator)

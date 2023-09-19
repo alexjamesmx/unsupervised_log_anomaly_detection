@@ -6,7 +6,7 @@ from torch.utils.data import Dataset
 
 
 class LogDataset(Dataset):
-    def __init__(self, sequentials=None, quantitatives=None, semantics=None, labels=None, idxs=None, eventIds=None):
+    def __init__(self, sequentials=None, quantitatives=None, semantics=None, labels=None, idxs=None, session_labels=None):
         if sequentials is None and quantitatives is None and semantics is None:
             raise ValueError('Provide at least one feature type')
         self.sequentials = sequentials
@@ -14,7 +14,7 @@ class LogDataset(Dataset):
         self.semantics = semantics
         self.labels = labels
         self.idxs = idxs
-        self.eventIds = eventIds
+        self.session_labels = session_labels
 
     def __len__(self):
         return len(self.labels)
@@ -30,9 +30,26 @@ class LogDataset(Dataset):
         if self.semantics is not None:
             item['semantic'] = torch.from_numpy(
                 np.array(self.semantics[idx])).float()
-        if self.eventIds is not None:
-            item['eventId'] = self.eventIds[idx]
+
         return item
+
+    def get_sequential(self):
+        return self.sequentials
+
+    def get_quantitative(self):
+        return self.quantitatives
+
+    def get_semantic(self):
+        return self.semantics
+
+    def get_label(self):
+        return self.labels
+
+    def get_idx(self):
+        return self.idxs
+
+    def get_session_labels(self):
+        return self.session_labels
 
 
 def data_collate(batch, feature_name='semantic', padding_side="right"):

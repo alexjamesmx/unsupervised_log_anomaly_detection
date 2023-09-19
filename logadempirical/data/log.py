@@ -72,12 +72,13 @@ class Log(object):
         self.valid_data = []
         self.original_data = []
 
-    def set_lengths(self, train_length, valid_length, test_length=None):
-        self.lengths = {
-            "train": train_length,
-            "valid": valid_length,
-            "test": test_length
-        }
+    def set_lengths(self, train_length=None, valid_length=None, test_length=None):
+        if test_length:
+            self.lengths["test"] = test_length
+        if valid_length:
+            self.lengths["valid"] = valid_length
+        if train_length:
+            self.lengths["train"] = train_length
 
     def set_train_sliding_window(self, sequentials=None, quantitatives=None, semantics=None, labels=None, idxs=None):
         if sequentials is None and quantitatives is None and semantics is None:
@@ -126,13 +127,23 @@ class Log(object):
             }
         }
 
-    def get_valid_sliding_window(self, length=False):
+    def get_valid_sliding_window(self, length=False, session_labels=False, sequence_idxs=False, labels=False, semantics=False, quantitatives=False, sequentials=False):
         if length:
             print("Valid lengths:")
-            pprint(self.valid_sliding_window["lengths"])
+            return pprint(self.valid_sliding_window["lengths"])
+        if session_labels:
+            return self.valid_sliding_window["session_labels"]
+        if sequence_idxs:
+            return self.valid_sliding_window["sequence_idxs"]
+        if labels:
+            return self.valid_sliding_window["labels"]
+        if semantics:
+            return self.valid_sliding_window["semantics"]
+        if quantitatives:
+            return self.valid_sliding_window["quantitatives"]
         else:
             print("Train slidings:")
-            pprint(self.valid_sliding_window)
+            return pprint(self.valid_sliding_window)
 
     def set_test_sliding_window(self, sequentials=None, quantitatives=None, semantics=None, labels=None,
                                 sequence_idxs=None, session_labels=None, eventIds=None):

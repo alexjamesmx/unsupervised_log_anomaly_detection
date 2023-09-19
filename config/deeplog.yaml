@@ -37,9 +37,9 @@ step_size: 1
 train_size: 0.01
 valid_ratio: 0.1
 window_size: 10
-load: true
-train: false
-update: true
+is_load: true
+is_train: false
+is_update: false
 #BGL
 # dataset configuration
 # data_dir: ./dataset/BGL

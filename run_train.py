@@ -51,8 +51,8 @@ def build_vocab(vocab_path: str,
         logger.info(f"Lenght of logs eventTemplate: {len(logs)}")
         vocab = Vocab(logs, os.path.join(data_dir, embeddings),
                       embedding_dim=embedding_dim)
-        logger.info(f"Main: Save vocab in {vocab_path}")
-        logger.info(f"Main: Vocab size: {len(vocab)}")
+        logger.info(f"Save vocab in {vocab_path}")
+        logger.info(f"Vocab size: {len(vocab)}")
         vocab.save_vocab(vocab_path)
     else:
         vocab = Vocab.load_vocab(vocab_path)
@@ -99,14 +99,14 @@ def build_model(args, vocab_size):
     return model
 
 
-def train_and_eval(args: argparse.Namespace,
-                   train_path: str,
-                   test_path: str,
-                   vocab: Vocab,
-                   model: torch.nn.Module,
-                   logger: Logger = getLogger("__name__"),
-                   accelerator: Accelerator = Accelerator()
-                   ) -> Tuple[float, float, float, float]:
+def train(args: argparse.Namespace,
+          train_path: str,
+          test_path: str,
+          vocab: Vocab,
+          model: torch.nn.Module,
+          logger: Logger = getLogger("__name__"),
+          accelerator: Accelerator = Accelerator()
+          ) -> Tuple[float, float, float, float]:
     """
     Run model
     Parameters
@@ -274,10 +274,10 @@ def run_train(args, accelerator, logger):
                             embedding_dim=args.embedding_dim,
                             logger=logger)
     model = build_model(args, vocab_size=len(log_vocab))
-    train_and_eval(args,
-                   train_path,
-                   test_path,
-                   log_vocab,
-                   model,
-                   logger=logger,
-                   accelerator=accelerator)
+    train(args,
+          train_path,
+          test_path,
+          log_vocab,
+          model,
+          logger=logger,
+          accelerator=accelerator)
