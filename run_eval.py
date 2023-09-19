@@ -69,7 +69,7 @@ def build_model(args, vocab_size):
 
     Returns
     -------
-
+    model : torch.nn.Module: Model
     """
     if args.model_name == "DeepLog":
         model_config = ModelConfig(
@@ -101,7 +101,7 @@ def eval(args: argparse.Namespace,
          test_path: str,
          vocab: Vocab,
          model: torch.nn.Module,
-         log: Log,
+         storeLog: Log,
          logger: Logger = getLogger("__name__"),
          accelerator: Accelerator = Accelerator()
          ) -> Tuple[float, float, float, float]:
@@ -125,7 +125,7 @@ def eval(args: argparse.Namespace,
         path=train_path,
         args=args,
         is_train=True,
-        log=log,
+        storeLog=storeLog,
         logger=logger)
 
     train_dataset, valid_dataset = preprocess_slidings(
@@ -134,7 +134,7 @@ def eval(args: argparse.Namespace,
         vocab=vocab,
         args=args,
         is_train=True,
-        log=log,
+        storeLog=storeLog,
         logger=logger,
     )
 
@@ -181,7 +181,7 @@ def eval(args: argparse.Namespace,
         path=test_path,
         args=args,
         is_train=False,
-        log=log,
+        storeLog=storeLog,
         logger=logger)
 
     test_dataset, eventIds = preprocess_slidings(
@@ -189,15 +189,17 @@ def eval(args: argparse.Namespace,
         vocab=vocab,
         args=args,
         is_train=False,
-        log=log,
+        storeLog=storeLog,
         logger=logger,
     )
+
+    session_labels = test_dataset.session_labels
     print(f"events ids: {eventIds}")
 
-    log.get_lenths()
-    log.get_train_sliding_window(length=True)
-    log.get_valid_sliding_window(length=True)
-    log.get_test_sliding_window(length=True)
+    storeLog.get_lenths()
+    storeLog.get_train_sliding_window(length=True)
+    storeLog.get_valid_sliding_window(length=True)
+    storeLog.get_test_sliding_window(length=True)
     # START PREDICTING
     logger.info(
         f"Start predicting {args.model_name} model on {device} device with top-{args.topk} recommendation")
@@ -208,7 +210,7 @@ def eval(args: argparse.Namespace,
                                                      device=device,
                                                      is_valid=False,
                                                      num_sessions=num_sessions,
-                                                     log=log
+                                                     storeLog=storeLog
                                                      )
 
     logger.info(
@@ -216,14 +218,15 @@ def eval(args: argparse.Namespace,
     return acc, f1, pre, rec
 
 
-def run_load(args, accelerator, logger):
+def run_eval(args, accelerator, logger):
+    print("run_eval")
     if args.grouping == "sliding":
         args.output_dir = f"{args.output_dir}{args.dataset_name}/sliding/W{args.window_size}_S{args.step_size}_C{args.is_chronological}_train{args.train_size}"
 
     else:
         args.output_dir = f"{args.output_dir}{args.dataset_name}/session/train{args.train_size}"
 
-    log = Log()
+    storeLog = Log()
 
     train_path, test_path = process_dataset(logger, data_dir=args.data_dir, output_dir=args.output_dir,
                                             log_file=args.log_file,
@@ -231,7 +234,7 @@ def run_load(args, accelerator, logger):
                                             window_size=args.window_size, step_size=args.step_size,
                                             train_size=args.train_size, is_chronological=args.is_chronological,
                                             session_type=args.session_level,
-                                            log=log)
+                                            storeLog=storeLog)
 
     os.makedirs(f"{args.output_dir}/vocabs", exist_ok=True)
     vocab_path = f"{args.output_dir}/vocabs/{args.model_name}.pkl"
@@ -248,6 +251,6 @@ def run_load(args, accelerator, logger):
          test_path,
          log_vocab,
          model,
-         log,
+         storeLog,
          logger=logger,
          accelerator=accelerator)

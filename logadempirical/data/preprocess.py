@@ -10,7 +10,7 @@ from logadempirical.data.dataset import LogDataset
 def preprocess_data(path: str,
                     args,
                     is_train: bool,
-                    log: Log,
+                    storeLog: Log,
                     logger) -> Tuple[list, list] or list:
     data, stat = load_features(path, is_train=is_train)
     phase_message = "train" if is_train else "test"
@@ -20,15 +20,15 @@ def preprocess_data(path: str,
         data = shuffle(data)
         n_valid = int(len(data) * args.valid_ratio)
         train_data, valid_data = data[:-n_valid], data[-n_valid:]
-        log.set_train_data(train_data)
-        log.set_valid_data(valid_data)
-        log.set_lengths(train_length=len(train_data), valid_length=len(
+        storeLog.set_train_data(train_data)
+        storeLog.set_valid_data(valid_data)
+        storeLog.set_lengths(train_length=len(train_data), valid_length=len(
             valid_data))
         return train_data, valid_data
     else:
-        test_data = data
-        log.set_test_data(test_data)
-        log.set_lengths(test_length=len(test_data))
+        test_data = data[:500]
+        storeLog.set_test_data(test_data)
+        storeLog.set_lengths(test_length=len(test_data))
         label_dict = {}
         counter = {}
         for (e, s, l) in test_data:
@@ -48,7 +48,7 @@ def preprocess_data(path: str,
 def preprocess_slidings(train_data=None, valid_data=None, test_data=None,
                         vocab=Vocab, args=None,
                         is_train=bool,
-                        log=Log,
+                        storeLog=Log,
                         logger=None):
 
     if is_train:
@@ -62,8 +62,8 @@ def preprocess_slidings(train_data=None, valid_data=None, test_data=None,
             sequential=args.sequential,
             logger=logger,
         )
-        log.set_train_sliding_window(sequentials, quantitatives,
-                                     semantics, labels, sequence_idxs)
+        storeLog.set_train_sliding_window(sequentials, quantitatives,
+                                          semantics, labels, sequence_idxs)
 
         train_dataset = LogDataset(
             sequentials, quantitatives, semantics, labels, sequence_idxs)
@@ -77,8 +77,8 @@ def preprocess_slidings(train_data=None, valid_data=None, test_data=None,
             sequential=args.sequential,
             logger=logger
         )
-        log.set_valid_sliding_window(sequentials, quantitatives,
-                                     semantics, labels, sequence_idxs, session_labels)
+        storeLog.set_valid_sliding_window(sequentials, quantitatives,
+                                          semantics, labels, sequence_idxs, session_labels)
         valid_dataset = LogDataset(
             sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels=session_labels)
         return train_dataset, valid_dataset
@@ -94,7 +94,7 @@ def preprocess_slidings(train_data=None, valid_data=None, test_data=None,
             logger=logger
         )
         test_dataset = LogDataset(
-            sequentials, quantitatives, semantics, labels, sequence_idxs)
-        log.set_test_sliding_window(sequentials, quantitatives,
-                                    semantics, labels, sequence_idxs, session_labels, eventIds)
+            sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels=session_labels)
+        storeLog.set_test_sliding_window(sequentials, quantitatives,
+                                         semantics, labels, sequence_idxs, session_labels, eventIds)
         return test_dataset, eventIds

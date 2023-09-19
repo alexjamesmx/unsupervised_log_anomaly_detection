@@ -151,7 +151,7 @@ class Trainer:
                              is_valid: bool = False,
                              num_sessions: Optional[List[int]] = None,
                              eventIds: Optional[List[str]] = None,
-                             log: Log = None
+                             storeLog: Log = None
                              ) -> Union[Tuple[float, float, float, float], Tuple[float, int]]:
         def find_topk(dataloader):
             y_topk = []
@@ -181,20 +181,17 @@ class Trainer:
                 test_loader, y_true, topk, device)
             return acc, find_topk(test_loader)
         else:
-            return self.predict_unsupervised_helper(test_loader, y_true, topk, device, num_sessions, eventIds, log=log)
+            return self.predict_unsupervised_helper(test_loader, y_true, topk, device, num_sessions, eventIds, storeLog=storeLog)
 
     def predict_unsupervised_helper(self, test_loader, y_true, topk: int, device: str = 'cpu',
                                     num_sessions: Optional[List[int]] = None,
                                     eventIds: Optional[List[str]] = None,
-                                    log=Log,
+                                    storeLog=Log,
                                     ) -> Tuple[float, float, float, float]:
         y_pred = {k: 0 for k in y_true.keys()}
         progress_bar = tqdm(total=len(test_loader), desc=f"Predict",
                             disable=not self.accelerator.is_local_main_process)
         for batch in test_loader:
-
-            # print("batch ", batch)
-
             idxs = self.accelerator.gather(
                 batch['idx']).detach().clone().cpu().numpy().tolist()
             support_label = (batch['sequential'] >=
@@ -212,7 +209,6 @@ class Trainer:
                     batch, top_k=topk, device=device)
             y = self.accelerator.gather(y).cpu().numpy().tolist()
 
-            # print("batch ", batch)
             # idxs is a list of indices representing sessions or sequences.
             # y is a list of lists containing the top-k predicted labels for each batch.
             # batch_label is a list that contains the next event label for each batch.
@@ -255,8 +251,8 @@ class Trainer:
             for idx in anomalies:
                 print(
                     f"Anomaly at session {idx + 1}, Event ID: {eventIds_replicated[idx]}")
-                original_log = log.get_original_data(eventIds_replicated[idx])
-                # print(f"Anomaly at: {original_log}\n")
+            # original_log = log.get_original_data(eventIds_replicated[idx])
+            # print(f"Anomaly at: {original_log}\n")
 
         else:
             y_pred = np.array([y_pred[idx] for idx in idxs])

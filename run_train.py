@@ -209,7 +209,7 @@ def train(args: argparse.Namespace,
     logger.info(f"Test data statistics: {stat}")
     label_dict = {}
     counter = {}
-    for (e, s, l) in data:
+    for (_,  s, l) in data:
         label_dict[tuple(s)] = l
         try:
             counter[tuple(s)] += 1

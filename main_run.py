@@ -9,6 +9,8 @@ import argparse
 
 from run_train import run_train
 from run_eval import run_eval
+from run_update import run_update
+
 # Logging config
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
@@ -22,7 +24,6 @@ accelerator = Accelerator()
 if __name__ == "__main__":
     parser = arg_parser()
     args = parser.parse_args()
-    print(args)
 
     if args.config_file is not None and os.path.exists(args.config_file):
         config_file = args.config_file

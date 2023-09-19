@@ -20,7 +20,7 @@ def process_dataset(logger: Logger,
                     train_size: float,
                     is_chronological: bool = False,
                     session_type: str = "entry",
-                    log: Log = None
+                    storeLog: Log = None
                     ) -> Tuple[str, str]:
     """
     creating log sequences by sliding window
