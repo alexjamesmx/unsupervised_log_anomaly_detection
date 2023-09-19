@@ -240,7 +240,8 @@ def train_and_eval(args: argparse.Namespace,
         sequential=args.sequential,
         logger=logger
     )
-    print("eventIds: ", eventIds)
+    print("eventIds: ", len(eventIds), eventIds)
+    print(f"test_data length {len(test_data)}")
 
     log.set_valid_data(valid_data)
     log.set_lengths(len(train_data), len(valid_data), len(test_data))
