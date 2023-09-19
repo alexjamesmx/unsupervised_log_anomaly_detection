@@ -16,11 +16,11 @@ history_size: 10
 
 # model configuration
 model_name: DeepLog
-embedding_dim: 300 # embedding dimension: from 32 to 1024
+embedding_dim: 300 # default: 300, can range: from 32 to 1024
 dropout: 0.1 # dropout rate: from 0.0 to 0.5
 hidden_size: 128 # hidden size: from 32 to 1024
 num_layers: 2 # number of layers: from 1 to 8
-topk: 9 # keep defa`ult
+topk: 9 # default
 
 # optimizer configuration
 scheduler: linear

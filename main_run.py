@@ -22,6 +22,7 @@ accelerator = Accelerator()
 if __name__ == "__main__":
     parser = arg_parser()
     args = parser.parse_args()
+    print(args)
 
     if args.config_file is not None and os.path.exists(args.config_file):
         config_file = args.config_file
@@ -39,7 +40,7 @@ if __name__ == "__main__":
         logging.INFO if accelerator.is_local_main_process else logging.ERROR)
 
     os.makedirs(args.output_dir, exist_ok=True)
-    logger.info(f"Main: Output directory: {args.output_dir}")
+    logger.info(f"Output directory: {args.output_dir}")
     if args.train and not args.load:
         run_train(args, accelerator,  logger)
     elif args.load and not args.train:
