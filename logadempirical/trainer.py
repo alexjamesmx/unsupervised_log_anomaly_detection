@@ -227,6 +227,9 @@ class Trainer:
         self.logger.info(f"Computing metrics...")
 
         if num_sessions is not None:
+            print(f"Total sessions: {sum(num_sessions)}")
+            print(
+                f"y_true: {len(y_true)} \ny_pred: {len(y_pred)}\nidxs: {len(idxs)}\neventIds: {len(eventIds)}")
             eventIds = [eventIds[idx] for idx in idxs]
             self.logger.info(f"Total sessions: {sum(num_sessions)}")
             y_pred = [[y_pred[idx]] * num_sessions[idx] for idx in idxs]

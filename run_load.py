@@ -224,6 +224,7 @@ def eval(args: argparse.Namespace,
         log=log,
         logger=logger,
     )
+    print(f"events ids: {eventIds}")
 
     log.get_lenths()
     log.get_train_sliding_window(length=True)

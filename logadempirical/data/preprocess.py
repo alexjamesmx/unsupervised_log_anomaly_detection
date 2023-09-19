@@ -39,7 +39,7 @@ def preprocess_data(path: str,
             except Exception:
                 counter[key] = 1
         test_data = [(list(k), v) for k, v in label_dict.items()]
-        # test_data = [(list(k), v) for k, v in test_data if v[1] == 1]
+        test_data = [(list(k), v) for k, v in test_data if v[1] == 1]
         print("REAL ANOMALIES HERE: ", len(test_data))
         num_sessions = [counter[tuple(k)] for k, _ in test_data]
         return test_data, num_sessions
