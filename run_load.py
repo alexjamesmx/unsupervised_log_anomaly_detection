@@ -117,6 +117,7 @@ def train_and_eval(args: argparse.Namespace,
     data = shuffle(data)
     n_valid = int(len(data) * args.valid_ratio)
     train_data, valid_data = data[:-n_valid], data[-n_valid:]
+    log.set_train_data(train_data)
 
     sequentials, quantitatives, semantics, labels, idxs, _ = sliding_window(
         train_data,
@@ -126,7 +127,7 @@ def train_and_eval(args: argparse.Namespace,
         semantic=args.semantic,
         quantitative=args.quantitative,
         sequential=args.sequential,
-        logger=logger
+        logger=logger,
     )
     log.set_train_sliding_window(sequentials, quantitatives,
                                  semantics, labels, idxs)
@@ -172,6 +173,7 @@ def train_and_eval(args: argparse.Namespace,
     )
     logger.info(
         f"Loading model from {args.output_dir}/models/{args.model_name}.pt\n")
+
     trainer.load_model(f"{args.output_dir}/models/{args.model_name}.pt")
 
     acc, recommend_topk = trainer.predict_unsupervised(valid_dataset,
@@ -186,82 +188,88 @@ def train_and_eval(args: argparse.Namespace,
     test_data, stat = load_features(test_path,
                                     is_train=False)
 
-    # test_data = [(e, list(k), v) for e, k, v in test_data if v == 1]
+    test_data = test_data[:1000]
     log.set_test_data(test_data)
+    train_loss = None
+    if args.update:
+        print("Updating model")
+        false_positive_data = log.get_test_data(
+            blockId="blk_-41265708926987771")
+        print(false_positive_data)
+        if len(false_positive_data) == 0:
+            raise Exception("False positive with id = n is not found")
+        sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels = sliding_window(
+            false_positive_data,
+            vocab=vocab,
+            window_size=args.history_size,
+            is_train=True,
+            semantic=args.semantic,
+            quantitative=args.quantitative,
+            sequential=args.sequential,
+            logger=logger
+        )
+        false_positive_dataset = LogDataset(
+            sequentials, quantitatives, semantics, labels, sequence_idxs)
+        train_loss, args.topk = trainer.train_on_false_positive(false_positive_dataset=false_positive_dataset,
+                                                                device=device,
+                                                                save_dir=f"{args.output_dir}/models",
+                                                                model_name=args.model_name,
+                                                                topk=args.topk)
+        logger.info(f"UPDATED MODEL Train Loss: {train_loss:.4f}")
 
     label_dict = {}
-    label_dict_ids = {}
-
     counter = {}
-
-    print(f"test_data: {len(test_data)}")
     for (e, s, l) in test_data:
         key = tuple(s)
-        label_dict[key] = l
+        label_dict[key] = [e, l]
         try:
             counter[key] += 1
         except Exception:
             counter[key] = 1
-
-    testing = [(list(k), v) for k, v in label_dict_ids.items()]
     test_data = [(list(k), v) for k, v in label_dict.items()]
-
-    print(f"testing: {len(testing)}\n")
-    print(f"test_data: {len(test_data)}")
-
+    test_data = [(list(k), v) for k, v in test_data if v[1] == 1]
+    print("REAL ANOMALIES HERE: ", len(test_data))
     num_sessions = [counter[tuple(k)] for k, _ in test_data]
+    sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels, eventIds = sliding_window(
+        test_data,
+        vocab=vocab,
+        window_size=args.history_size,
+        is_train=False,
+        semantic=args.semantic,
+        quantitative=args.quantitative,
+        sequential=args.sequential,
+        logger=logger
+    )
 
-    # sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels = sliding_window(
-    #     test_data,
-    #     vocab=vocab,
-    #     window_size=args.history_size,
-    #     is_train=False,
-    #     semantic=args.semantic,
-    #     quantitative=args.quantitative,
-    #     sequential=args.sequential,
-    #     logger=logger
-    # )
-    # sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels = sliding_window(
-    #     testing,
-    #     vocab=vocab,
-    #     window_size=args.history_size,
-    #     is_train=False,
-    #     semantic=args.semantic,
-    #     quantitative=args.quantitative,
-    #     sequential=args.sequential,
-    #     logger=logger
-    # )
+    log.set_valid_data(valid_data)
+    log.set_lengths(len(train_data), len(valid_data), len(test_data))
 
-    # log.set_train_data(train_data)
-    # log.set_valid_data(valid_data)
-    # log.set_lengths(len(train_data), len(valid_data), len(test_data))
+    log.set_test_sliding_window(sequentials, quantitatives,
+                                semantics, labels, sequence_idxs, session_labels, eventIds)
+    log.get_lenths()
+    log.get_train_sliding_window(length=True)
+    log.get_valid_sliding_window(length=True)
+    log.get_test_sliding_window(length=True)
 
-    # log.set_test_sliding_window(sequentials, quantitatives,
-    #                             semantics, labels, sequence_idxs, session_labels)
-    # log.get_lenths()
-    # log.get_train_sliding_window(length=True)
-    # log.get_valid_sliding_window(length=True)
-    # log.get_test_sliding_window(length=True)
-    # print(f"train:{ log.get_train_data(0, 1)}\n")
-    # print(f"test { log.get_test_data(0, 1)}\n")
-    # print(f"valid { log.get_valid_data(0, 1)}\n")
+    test_dataset = LogDataset(
+        sequentials, quantitatives, semantics, labels, sequence_idxs)
 
-    # test_dataset = LogDataset(
-    #     sequentials, quantitatives, semantics, labels, sequence_idxs)
+    # START PREDICTING
+    logger.info(
+        f"Start predicting {args.model_name} model on {device} device with top-{args.topk} recommendation")
+    acc, f1, pre, rec = trainer.predict_unsupervised(test_dataset,
+                                                     session_labels,
+                                                     eventIds=eventIds,
+                                                     topk=args.topk,
+                                                     device=device,
+                                                     is_valid=False,
+                                                     num_sessions=num_sessions,
+                                                     log=log
+                                                     )
 
-    # # START PREDICTING
-    # logger.info(
-    #     f"Start predicting {args.model_name} model on {device} device with top-{args.topk} recommendation")
-    # acc, f1, pre, rec = trainer.predict_unsupervised(test_dataset,
-    #                                                  session_labels,
-    #                                                  topk=args.topk,
-    #                                                  device=device,
-    #                                                  is_valid=False,
-    #                                                  num_sessions=num_sessions)
-
-    # logger.info(
-    #     f"Test Result:: Acc: {acc:.4f}, Precision: {pre:.4f}, Recall: {rec:.4f}, F1: {f1:.4f}")
-    # return acc, f1, pre, rec
+    logger.info(
+        f"Test Result:: Acc: {acc:.4f}, Precision: {pre:.4f}, Recall: {rec:.4f}, F1: {f1:.4f}")
+    return acc, f1, pre, rec
 
 
 def run_load(args, accelerator, logger):

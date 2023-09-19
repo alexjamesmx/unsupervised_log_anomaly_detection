@@ -30,7 +30,8 @@ class LogDataset(Dataset):
         if self.semantics is not None:
             item['semantic'] = torch.from_numpy(
                 np.array(self.semantics[idx])).float()
-
+        if self.eventIds is not None:
+            item['eventId'] = self.eventIds[idx]
         return item
 
 

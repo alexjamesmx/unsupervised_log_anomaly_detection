@@ -9,7 +9,7 @@ from typing import Any, Optional, List, Union, Tuple
 import logging
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score, top_k_accuracy_score
 from itertools import chain
-# from logadempirical.data.vocab import Vocab
+from logadempirical.data.log import Log
 
 
 class Trainer:
@@ -150,6 +150,8 @@ class Trainer:
                              device: str = 'cpu',
                              is_valid: bool = False,
                              num_sessions: Optional[List[int]] = None,
+                             eventIds: Optional[List[str]] = None,
+                             log: Log = None
                              ) -> Union[Tuple[float, float, float, float], Tuple[float, int]]:
         def find_topk(dataloader):
             y_topk = []
@@ -179,14 +181,19 @@ class Trainer:
                 test_loader, y_true, topk, device)
             return acc, find_topk(test_loader)
         else:
-            return self.predict_unsupervised_helper(test_loader, y_true, topk, device, num_sessions)
+            return self.predict_unsupervised_helper(test_loader, y_true, topk, device, num_sessions, eventIds, log=log)
 
     def predict_unsupervised_helper(self, test_loader, y_true, topk: int, device: str = 'cpu',
-                                    num_sessions: Optional[List[int]] = None) -> Tuple[float, float, float, float]:
+                                    num_sessions: Optional[List[int]] = None,
+                                    eventIds: Optional[List[str]] = None,
+                                    log=Log,
+                                    ) -> Tuple[float, float, float, float]:
         y_pred = {k: 0 for k in y_true.keys()}
         progress_bar = tqdm(total=len(test_loader), desc=f"Predict",
                             disable=not self.accelerator.is_local_main_process)
         for batch in test_loader:
+
+            # print("batch ", batch)
 
             idxs = self.accelerator.gather(
                 batch['idx']).detach().clone().cpu().numpy().tolist()
@@ -197,12 +204,15 @@ class Trainer:
                 support_label).cpu().numpy().tolist()
             batch_label = self.accelerator.gather(
                 batch['label']).cpu().numpy().tolist()
+
             del batch['idx']
 
             with torch.no_grad():
                 y = self.accelerator.unwrap_model(self.model).predict_class(
                     batch, top_k=topk, device=device)
             y = self.accelerator.gather(y).cpu().numpy().tolist()
+
+            # print("batch ", batch)
             # idxs is a list of indices representing sessions or sequences.
             # y is a list of lists containing the top-k predicted labels for each batch.
             # batch_label is a list that contains the next event label for each batch.
@@ -215,18 +225,39 @@ class Trainer:
         progress_bar.close()
         idxs = list(y_pred.keys())
         self.logger.info(f"Computing metrics...")
+
         if num_sessions is not None:
+            eventIds = [eventIds[idx] for idx in idxs]
             self.logger.info(f"Total sessions: {sum(num_sessions)}")
             y_pred = [[y_pred[idx]] * num_sessions[idx] for idx in idxs]
             y_true = [[y_true[idx]] * num_sessions[idx] for idx in idxs]
             y_pred = np.array(list(chain.from_iterable(y_pred)))
             y_true = np.array(list(chain.from_iterable(y_true)))
+
             self.logger.info(f"Total sessions: {len(y_pred)}")
+
+            print(f"y_true: {y_true.shape} \ny_pred: {y_pred.shape}")
+            # Process y_true and y_pred
+            y_true_replicated = np.concatenate(
+                [np.repeat(t, n) for t, n in zip(y_true, num_sessions)])
+            y_pred_replicated = np.concatenate(
+                [np.repeat(p, n) for p, n in zip(y_pred, num_sessions)])
+            eventIds_replicated = np.concatenate(
+                [np.repeat(e, n) for e, n in zip(eventIds, num_sessions)])
+
+            # Find indices where both y_true and y_pred are equal to 1
+            anomalies = np.where((y_true_replicated == 1)
+                                 & (y_pred_replicated == 1))[0]
+
+            for idx in anomalies:
+                print(
+                    f"Anomaly at session {idx + 1}, Event ID: {eventIds_replicated[idx]}")
+                original_log = log.get_original_data(eventIds_replicated[idx])
+                # print(f"Anomaly at: {original_log}\n")
+
         else:
             y_pred = np.array([y_pred[idx] for idx in idxs])
             y_true = np.array([y_true[idx] for idx in idxs])
-
-        # print("y pred ", y_pred)
 
         acc = accuracy_score(y_true, y_pred)
         f1 = f1_score(y_true, y_pred)
@@ -234,6 +265,38 @@ class Trainer:
         rec = recall_score(y_true, y_pred)
         progress_bar.close()
         return acc, f1, pre, rec
+
+    def train_on_false_positive(self, false_positive_dataset, device: str = 'cpu', save_dir: str = None, model_name: str = None, topk: int = 1):
+        train_loader = DataLoader(
+            false_positive_dataset, batch_size=self.batch_size, shuffle=True)
+        self.model.to(device)
+        self.model, train_loader = self.accelerator.prepare(
+            self.model, train_loader)
+        self.optimizer.zero_grad()
+        # Train the model on the false positive anomaly data
+        num_training_steps = int(
+            self.no_epochs * len(train_loader) / self.accumulation_step)
+        num_warmup_steps = int(num_training_steps * self.warmup_rate)
+        self.scheduler = get_scheduler(
+            self.scheduler_type,
+            optimizer=self.optimizer,
+            num_warmup_steps=num_warmup_steps,
+            num_training_steps=num_training_steps
+        )
+        progress_bar = tqdm(range(num_training_steps), desc=f"Training",
+                            disable=not self.accelerator.is_local_main_process)
+        total_train_loss = 0
+
+        for epoch in range(self.no_epochs):
+            train_loss = self._train_epoch(
+                train_loader, device, self.scheduler, progress_bar)
+            total_train_loss += train_loss
+        if save_dir is not None and model_name is not None:
+            self.save_model(save_dir, model_name)
+        _, _, train_k = self._valid_epoch(train_loader, device, topk=topk)
+        print(
+            f"total_train_loss: {total_train_loss / self.no_epochs} top-{topk}: {train_k}")
+        return total_train_loss / self.no_epochs, train_k
 
     def save_model(self, save_dir: str, model_name: str):
         if not os.path.exists(save_dir):

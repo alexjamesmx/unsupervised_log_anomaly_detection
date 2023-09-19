@@ -23,8 +23,6 @@ def load_features(data_path, min_len=0, is_train=True, log=Log()):
     with open(data_path, 'rb') as f:
         data = pickle.load(f)
 
-    log.set_original_data(data)
-
     if is_train:
         logs = []
         no_abnormal = 0
@@ -96,6 +94,7 @@ def sliding_window(data: List[Tuple[List[str], int]],
     log_sequences = []
     session_labels = {}
     unique_ab_events = set()
+
     if is_train:
 
         for idx, (*eventId, templates, labels) in tqdm(enumerate(data), total=len(data),
@@ -156,19 +155,20 @@ def sliding_window(data: List[Tuple[List[str], int]],
             f"Number of abnormal sessions: {sum(session_labels.values())}/{len(session_labels)}\n")
 
         return sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels
-
     else:
-        for idx, (*eventId, templates, labels) in tqdm(enumerate(data), total=len(data),
-                                                       desc=f"Sliding window with size {window_size}"):
+        eventIds = {}
+        for idx, (templates, [eventId, labels]) in tqdm(enumerate(data), total=len(data),
+                                                        desc=f"Sliding window with size {window_size}"):
 
-            print(
-                f"eventId: {eventId} templates: {templates} labels: {labels}")
             line = list(templates)
             line = line + [vocab.pad_token] * (window_size - len(line) + 1)
             if isinstance(labels, list):
                 labels = [0] * (window_size - len(labels) + 1) + labels
             session_labels[idx] = labels if isinstance(
                 labels, int) else max(labels)
+
+            if eventId:
+                eventIds[idx] = (eventId)
             for i in range(len(line) - window_size):
                 label = vocab.get_event(line[i + window_size],
                                         use_similar=quantitative)  # use_similar only for LogAnomaly
@@ -197,8 +197,6 @@ def sliding_window(data: List[Tuple[List[str], int]],
                     sequence['semantic'] = semantic_pattern
                 sequence['label'] = label
                 sequence['idx'] = idx
-                # if eventId:
-                #     sequence['eventId'] = eventId
 
                 log_sequences.append(sequence)
 
@@ -211,7 +209,6 @@ def sliding_window(data: List[Tuple[List[str], int]],
             semantics = [seq['semantic'] for seq in log_sequences]
 
         labels = [seq['label'] for seq in log_sequences]
-        # eventIds = [seq['eventId'] for seq in log_sequences]
         sequence_idxs = [seq['idx'] for seq in log_sequences]
         logger.info(f"Number of sequences: {len(labels)}")
 
@@ -220,4 +217,4 @@ def sliding_window(data: List[Tuple[List[str], int]],
         logger.info(
             f"Number of abnormal sessions: {sum(session_labels.values())}/{len(session_labels)}\n")
 
-        return sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels
+        return sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels, eventIds

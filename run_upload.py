@@ -13,20 +13,17 @@ import argparse
 from typing import List, Tuple, Optional
 import numpy as np
 
-from logadempirical.data import process_dataset
+from logadempirical.data.data_loader import process_dataset
 from logadempirical.data.vocab import Vocab
 from logadempirical.data.feature_extraction import load_features, sliding_window
 from logadempirical.data.dataset import LogDataset
 from logadempirical.helpers import arg_parser, get_optimizer
 from logadempirical.models import get_model, ModelConfig
 from logadempirical.trainer import Trainer
+from logadempirical.data.log import Log
 
 
 def build_vocab(vocab_path: str,
-                data_dir: str,
-                train_path: str,
-                embeddings: str,
-                embedding_dim: int = 300,
                 logger: Logger = getLogger("__name__")) -> Vocab:
     """
     Build vocab from training data
@@ -43,22 +40,12 @@ def build_vocab(vocab_path: str,
     -------
     vocab: Vocab: Vocabulary
     """
-    if not os.path.exists(vocab_path):
-        with open(train_path, 'rb') as f:
-            data = pickle.load(f)
-        logs = [x['EventTemplate']
-                for x in data if np.max(x['Label']) == 0]
-        logger.info(f"Lenght of logs eventTemplate: {len(logs)}")
-        vocab = Vocab(logs, os.path.join(data_dir, embeddings),
-                      embedding_dim=embedding_dim)
-        logger.info(f"Main: Save vocab in {vocab_path}")
-        logger.info(f"Main: Vocab size: {len(vocab)}")
-        vocab.save_vocab(vocab_path)
-    else:
+    if os.path.exists(vocab_path):
         vocab = Vocab.load_vocab(vocab_path)
         logger.info(f"Load vocab from {vocab_path}")
         logger.info(f"Vocab size: {len(vocab)}")
-
+    else:
+        raise FileNotFoundError(f"Vocab file {vocab_path} not found")
     return vocab
 
 
@@ -104,6 +91,7 @@ def train_and_eval(args: argparse.Namespace,
                    test_path: str,
                    vocab: Vocab,
                    model: torch.nn.Module,
+                   log: Log,
                    logger: Logger = getLogger("__name__"),
                    accelerator: Accelerator = Accelerator()
                    ) -> Tuple[float, float, float, float]:
@@ -125,16 +113,11 @@ def train_and_eval(args: argparse.Namespace,
     data, stat = load_features(train_path,
                                is_train=True)
 
-    logger.info(f"Main: log sequences statistics: {stat}")
+    logger.info(f"Main: Train log sequences statistics: {stat}")
     data = shuffle(data)
-    logger.info(f"Main: log sequences length: {str(len(data))}")
     n_valid = int(len(data) * args.valid_ratio)
     train_data, valid_data = data[:-n_valid], data[-n_valid:]
 
-    logger.info(
-        f"Main: ,training, valid size: {len(train_data)}, {str(n_valid)} where valid ratio is {args.valid_ratio}")
-
-    print("\nBuilding train dataset\n")
     sequentials, quantitatives, semantics, labels, idxs, _ = sliding_window(
         train_data,
         vocab=vocab,
@@ -143,32 +126,34 @@ def train_and_eval(args: argparse.Namespace,
         semantic=args.semantic,
         quantitative=args.quantitative,
         sequential=args.sequential,
-        logger=logger
+        logger=logger,
     )
+    log.set_train_sliding_window(sequentials, quantitatives,
+                                 semantics, labels, idxs)
 
     train_dataset = LogDataset(
         sequentials, quantitatives, semantics, labels, idxs)
-    print("\nBuilding valid dataset\n")
     sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels = sliding_window(
         valid_data,
         vocab=vocab,
         window_size=args.history_size,
-        is_train=False,
+        is_train=True,
         semantic=args.semantic,
         quantitative=args.quantitative,
         sequential=args.sequential,
         logger=logger
     )
+    log.set_valid_sliding_window(sequentials, quantitatives,
+                                 semantics, labels, sequence_idxs, session_labels)
     valid_dataset = LogDataset(
         sequentials, quantitatives, semantics, labels, sequence_idxs)
-    logger.info(
-        f"Train dataset: {len(train_dataset)}, Valid dataset: {len(valid_dataset)}")
+
     optimizer = get_optimizer(args, model.parameters())
     device = accelerator.device
     model = model.to(device)
 
-    logger.info(f"Start training {args.model_name} model on {device} device\n")
-    logger.info(model)
+    logger.info(f"Start training {args.model_name} model on {device} device")
+    logger.info(f"{model}\n")
 
     trainer = Trainer(
         model,
@@ -185,44 +170,43 @@ def train_and_eval(args: argparse.Namespace,
         accelerator=accelerator,
         num_classes=len(vocab),
     )
-
-    train_loss, val_loss, val_acc, args.topk = trainer.train(device=device,
-                                                             save_dir=f"{args.output_dir}/models",
-                                                             model_name=args.model_name,
-                                                             topk=args.topk)
     logger.info(
-        f"Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f} - Val Acc: {val_acc:.4f}")
+        f"Loading model from {args.output_dir}/models/{args.model_name}.pt\n")
+    trainer.load_model(f"{args.output_dir}/models/{args.model_name}.pt")
 
-    logger.info(
-        f"Length of sessions labels: {len(session_labels)}, Length of valid dataset: {len(valid_dataset)}")
     acc, recommend_topk = trainer.predict_unsupervised(valid_dataset,
                                                        session_labels,
                                                        topk=args.topk,
                                                        device=device,
                                                        is_valid=True)
     logger.info(
-        f"Validation Result:: Acc: {acc:.4f}, Top-{args.topk} Recommendation: {recommend_topk}\n")
+        f"Validation Result:: Acc: {acc:.4f}, Top-{args.topk} Recommendation: {recommend_topk}")
+
     # now load test data
-    print("Loading test dataset")
-    data, stat = load_features(test_path,
-                               is_train=False)
-    logger.info(f"Test data statistics: {stat}")
+    test_data, stat = load_features(test_path,
+                                    is_train=False)
+
+    test_data = test_data[:1000]
+    log.set_test_data(test_data)
     label_dict = {}
     counter = {}
-    for (e, s, l) in data:
-        label_dict[tuple(s)] = l
+    for (e, s, l) in test_data:
+        key = tuple(s)
+        label_dict[key] = [e, l]
         try:
-            counter[tuple(s)] += 1
+            counter[key] += 1
         except Exception:
-            counter[tuple(s)] = 1
+            counter[key] = 1
 
-    # Label dict e.g {('Receiving block <*> src: /<*> dest: /<*>', 'Receiving block <*> src: /<*> dest: /<*>', 'Receiving block <*> src: /<*> dest: /<*>', 'BLOCK* NameSystem.allocateBlock: <*> <*>', 'PacketResponder <*> for block <*> <*>', 'Received block <*> of size <*> from /<*>', 'BLOCK* NameSystem.addStoredBlock: blockMap updated: <*> is added to <*> size <*>', 'PacketResponder <*> for block <*> <*>', 'PacketResponder <*> for block <*> <*>', 'Received block <*> of size <*> from /<*>', 'Received block <*> of size <*> from /<*>', 'BLOCK* NameSystem.addStoredBlock: blockMap updated: <*> is added to <*> size <*>', 'BLOCK* NameSystem.addStoredBlock: blockMap updated: <*> is added to <*> size <*>', 'Verification succeeded for <*>', 'Verification succeeded for <*>', 'BLOCK* NameSystem.delete: <*> is added to invalidSet of <*>', 'BLOCK* NameSystem.delete: <*> is added to invalidSet of <*>', 'BLOCK* NameSystem.delete: <*> is added to invalidSet of <*>', 'Deleting block <*> file <*>', 'Deleting block <*> file <*>', 'Deleting block <*> file <*>'): 0,...}
-    data = [(list(k), v) for k, v in label_dict.items()]
-    # num_sessions = [n,n,n,n] where n is the number of times a session appears in the test data
-    num_sessions = [counter[tuple(k)] for k, _ in data]
+    test_data = [(list(k), v) for k, v in label_dict.items()]
+    print("unique sequences ", len(test_data))
+    test_data = [(list(k), v) for k, v in test_data if v[1] == 1]
+    print("abnormal ", len(test_data))
 
-    sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels = sliding_window(
-        data,
+    num_sessions = [counter[tuple(k)] for k, _ in test_data]
+    print("num_sessions ", num_sessions)
+    sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels, eventIds = sliding_window(
+        test_data,
         vocab=vocab,
         window_size=args.history_size,
         is_train=False,
@@ -232,52 +216,66 @@ def train_and_eval(args: argparse.Namespace,
         logger=logger
     )
 
+    log.set_train_data(train_data)
+    log.set_valid_data(valid_data)
+    log.set_lengths(len(train_data), len(valid_data), len(test_data))
+
+    log.set_test_sliding_window(sequentials, quantitatives,
+                                semantics, labels, sequence_idxs, session_labels, eventIds)
+    log.get_lenths()
+    log.get_train_sliding_window(length=True)
+    log.get_valid_sliding_window(length=True)
+    log.get_test_sliding_window(length=True)
+
     test_dataset = LogDataset(
         sequentials, quantitatives, semantics, labels, sequence_idxs)
-    logger.info(f"Test dataset: {len(test_dataset)}")
+
+    # START PREDICTING
     logger.info(
         f"Start predicting {args.model_name} model on {device} device with top-{args.topk} recommendation")
     acc, f1, pre, rec = trainer.predict_unsupervised(test_dataset,
                                                      session_labels,
+                                                     eventIds=eventIds,
                                                      topk=args.topk,
                                                      device=device,
                                                      is_valid=False,
-                                                     num_sessions=num_sessions,)
+                                                     num_sessions=num_sessions,
+                                                     log=log
+                                                     )
 
     logger.info(
         f"Test Result:: Acc: {acc:.4f}, Precision: {pre:.4f}, Recall: {rec:.4f}, F1: {f1:.4f}")
-    logger.info(
-        f"window size: {args.window_size}, history size: {args.history_size}")
     return acc, f1, pre, rec
 
 
-def run_train(args, accelerator, logger):
-
+def run_load(args, accelerator, logger):
     if args.grouping == "sliding":
         args.output_dir = f"{args.output_dir}{args.dataset_name}/sliding/W{args.window_size}_S{args.step_size}_C{args.is_chronological}_train{args.train_size}"
 
     else:
         args.output_dir = f"{args.output_dir}{args.dataset_name}/session/train{args.train_size}"
 
+    log = Log()
+
     train_path, test_path = process_dataset(logger, data_dir=args.data_dir, output_dir=args.output_dir,
                                             log_file=args.log_file,
                                             dataset_name=args.dataset_name, grouping=args.grouping,
                                             window_size=args.window_size, step_size=args.step_size,
                                             train_size=args.train_size, is_chronological=args.is_chronological,
-                                            session_type=args.session_level)
+                                            session_type=args.session_level,
+                                            log=log)
+
     os.makedirs(f"{args.output_dir}/vocabs", exist_ok=True)
     vocab_path = f"{args.output_dir}/vocabs/{args.model_name}.pkl"
-    log_vocab = build_vocab(vocab_path,
-                            args.data_dir,
-                            train_path,
-                            args.embeddings,
-                            embedding_dim=args.embedding_dim,
-                            logger=logger)
+
+    log_vocab = build_vocab(vocab_path, logger=logger)
+
     model = build_model(args, vocab_size=len(log_vocab))
     train_and_eval(args,
                    train_path,
                    test_path,
                    log_vocab,
                    model,
+                   log,
                    logger=logger,
                    accelerator=accelerator)

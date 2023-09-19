@@ -1,3 +1,4 @@
+#HDFS
 # dataset configuration
 data_dir: ./dataset/HDFS
 dataset_name: HDFS
@@ -38,6 +39,8 @@ valid_ratio: 0.1
 window_size: 10
 load: true
 train: false
+update: true
+#BGL
 # dataset configuration
 # data_dir: ./dataset/BGL
 # output_dir: ./output/

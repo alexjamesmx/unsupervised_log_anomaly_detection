@@ -2,6 +2,12 @@ from pprint import pprint
 
 
 class Log(object):
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(Log, cls).__new__(cls)
+        return cls._instance
 
     def __init__(self):
 
@@ -49,13 +55,15 @@ class Log(object):
             "labels": None,
             "sequence_idxs": None,
             "session_labels": None,
+            "eventIds": None,
             "lengths": {
                 "sequentials": None,
                 "quantitivese": None,
                 "semantics": None,
                 "labels": None,
                 "sequence_idxs": None,
-                "session_labels": None
+                "session_labels": None,
+                "eventIds": None
             }
         }
 
@@ -114,7 +122,7 @@ class Log(object):
                 "semantics": len(semantics) if semantics is not None else None,
                 "labels": len(labels) if labels is not None else None,
                 "sequence_idxs": len(sequence_idxs) if sequence_idxs is not None else None,
-                "session_labels": len(session_labels) if session_labels is not None else None
+                "session_labels": len(session_labels) if session_labels is not None else None,
             }
         }
 
@@ -127,7 +135,7 @@ class Log(object):
             pprint(self.valid_sliding_window)
 
     def set_test_sliding_window(self, sequentials=None, quantitatives=None, semantics=None, labels=None,
-                                sequence_idxs=None, session_labels=None):
+                                sequence_idxs=None, session_labels=None, eventIds=None):
         if sequentials is None and quantitatives is None and semantics is None:
             raise ValueError('Provide at least one feature type')
         self.test_sliding_window = {
@@ -137,13 +145,15 @@ class Log(object):
             "labels": labels,
             "sequence_idxs": sequence_idxs,
             "session_labels": session_labels,
+            "eventIds": eventIds,
             "lengths": {
                 "sequentials": len(sequentials) if sequentials is not None else None,
                 "quantitatives": len(quantitatives) if quantitatives is not None else None,
                 "semantics": len(semantics) if semantics is not None else None,
                 "labels": len(labels) if labels is not None else None,
                 "sequence_idxs": len(sequence_idxs) if sequence_idxs is not None else None,
-                "session_labels": len(session_labels) if session_labels is not None else None
+                "session_labels": len(session_labels) if session_labels is not None else None,
+                "eventIds": len(eventIds) if eventIds is not None else None
             }
         }
 
@@ -190,7 +200,9 @@ class Log(object):
 
         return self.train_data[n:m]
 
-    def get_test_data(self, n=None, m=None):
+    def get_test_data(self, n=None, m=None, blockId=None):
+        if blockId:
+            return [log for log in self.test_data if log[0] == blockId]
         if n is None:
             n = 0  # Default start value if not provided
         if m is None:
@@ -235,6 +247,7 @@ class Log(object):
 
     def get_original_data(self, blockId=None):
         if blockId:
-            return [log for log in self.original_data if log["BlockId"] == blockId]
+            print("BlockId: ", blockId)
+            return [log for log in self.original_data if log["SessionId"] == "41265708926987771"]
         else:
             return self.original_data
