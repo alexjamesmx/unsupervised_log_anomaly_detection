@@ -8,7 +8,7 @@ import logging
 import argparse
 
 from run_train import run_train
-from run_load import run_load
+from run_eval import run_eval
 # Logging config
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
@@ -44,6 +44,8 @@ if __name__ == "__main__":
     if args.is_train and not args.is_load:
         run_train(args, accelerator,  logger)
     elif args.is_load and not args.is_train:
-        run_load(args, accelerator, logger)
+        run_eval(args, accelerator, logger)
+    elif args.is_update and not args.is_train and not args.is_load:
+        run_update(args, accelerator, logger)
     else:
         raise ValueError("Either train or load must be True")
