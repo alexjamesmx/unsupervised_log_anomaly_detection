@@ -205,7 +205,6 @@ def train_and_eval(args: argparse.Namespace,
             is_train=True,
             semantic=args.semantic,
             quantitative=args.quantitative,
-            sequential=args.sequential,
             logger=logger
         )
         false_positive_dataset = LogDataset(
