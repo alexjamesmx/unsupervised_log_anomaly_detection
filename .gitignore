@@ -3,3 +3,4 @@
 /testing/**
 __pycache__/**
 logadempirical/__pycache__/**
+logadempirical/data/__pycache__/**
