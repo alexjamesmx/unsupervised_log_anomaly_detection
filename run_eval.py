@@ -176,31 +176,6 @@ def eval(args: argparse.Namespace,
     logger.info(
         f"Validation Result:: Acc: {acc:.4f}, Top-{args.topk} Recommendation: {recommend_topk}")
 
-    if args.is_update:
-        print("Updating model")
-        false_positive_data = log.get_test_data(
-            blockId="blk_-41265708926987771")
-        print(false_positive_data)
-        if len(false_positive_data) == 0:
-            raise Exception("False positive with id = n is not found")
-        sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels = sliding_window(
-            false_positive_data,
-            vocab=vocab,
-            window_size=args.history_size,
-            is_train=True,
-            semantic=args.semantic,
-            quantitative=args.quantitative,
-            sequential=args.sequential,
-            logger=logger
-        )
-        false_positive_dataset = LogDataset(
-            sequentials, quantitatives, semantics, labels, sequence_idxs)
-        train_loss, args.topk = trainer.train_on_false_positive(false_positive_dataset=false_positive_dataset,
-                                                                device=device,
-                                                                save_dir=f"{args.output_dir}/models",
-                                                                model_name=args.model_name,
-                                                                topk=args.topk)
-        logger.info(f"UPDATED MODEL Train Loss: {train_loss:.4f}")
     #  preprocess test data
     test_data, num_sessions = preprocess_data(
         path=test_path,
@@ -208,8 +183,6 @@ def eval(args: argparse.Namespace,
         is_train=False,
         log=log,
         logger=logger)
-
-    train_loss = None
 
     test_dataset, eventIds = preprocess_slidings(
         test_data=test_data,

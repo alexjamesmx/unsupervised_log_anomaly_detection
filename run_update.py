@@ -126,22 +126,6 @@ def update(args: argparse.Namespace,
     Accuracy metrics
     """
     # Preprocess training data
-    train_data, valid_data = preprocess_data(
-        path=train_path,
-        args=args,
-        is_train=True,
-        log=log,
-        logger=logger)
-
-    train_dataset, valid_dataset = preprocess_slidings(
-        train_data=train_data,
-        valid_data=valid_data,
-        vocab=vocab,
-        args=args,
-        is_train=True,
-        log=log,
-        logger=logger,
-    )
 
     # Build model
     optimizer = get_optimizer(args, model.parameters())
@@ -150,9 +134,6 @@ def update(args: argparse.Namespace,
 
     trainer = Trainer(
         model,
-        train_dataset=train_dataset,
-        valid_dataset=valid_dataset,
-        is_train=True,
         optimizer=optimizer,
         no_epochs=args.max_epoch,
         batch_size=args.batch_size,
@@ -170,42 +151,30 @@ def update(args: argparse.Namespace,
 
     trainer.load_model(f"{args.output_dir}/models/{args.model_name}.pt")
 
-    session_labels = valid_dataset.get_session_labels()
-
-    # Recommend top-k
-    acc, recommend_topk = trainer.predict_unsupervised(valid_dataset,
-                                                       session_labels,
-                                                       topk=args.topk,
-                                                       device=device,
-                                                       is_valid=True)
-    logger.info(
-        f"Validation Result:: Acc: {acc:.4f}, Top-{args.topk} Recommendation: {recommend_topk}")
-
-    if args.is_update:
-        print("Updating model")
-        false_positive_data = log.get_test_data(
-            blockId="blk_-41265708926987771")
-        print(false_positive_data)
-        if len(false_positive_data) == 0:
-            raise Exception("False positive with id = n is not found")
-        sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels = sliding_window(
-            false_positive_data,
-            vocab=vocab,
-            window_size=args.history_size,
-            is_train=True,
-            semantic=args.semantic,
-            quantitative=args.quantitative,
-            sequential=args.sequential,
-            logger=logger
-        )
-        false_positive_dataset = LogDataset(
-            sequentials, quantitatives, semantics, labels, sequence_idxs)
-        train_loss, args.topk = trainer.train_on_false_positive(false_positive_dataset=false_positive_dataset,
-                                                                device=device,
-                                                                save_dir=f"{args.output_dir}/models",
-                                                                model_name=args.model_name,
-                                                                topk=args.topk)
-        logger.info(f"UPDATED MODEL Train Loss: {train_loss:.4f}")
+    print("Updating model")
+    false_positive_data = log.get_test_data(
+        blockId="blk_-41265708926987771")
+    print(false_positive_data)
+    if len(false_positive_data) == 0:
+        raise Exception("False positive with id = n is not found")
+    sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels = sliding_window(
+        false_positive_data,
+        vocab=vocab,
+        window_size=args.history_size,
+        is_train=True,
+        semantic=args.semantic,
+        quantitative=args.quantitative,
+        sequential=args.sequential,
+        logger=logger
+    )
+    false_positive_dataset = LogDataset(
+        sequentials, quantitatives, semantics, labels, sequence_idxs)
+    train_loss, args.topk = trainer.train_on_false_positive(false_positive_dataset=false_positive_dataset,
+                                                            device=device,
+                                                            save_dir=f"{args.output_dir}/models",
+                                                            model_name=args.model_name,
+                                                            topk=args.topk)
+    logger.info(f"UPDATED MODEL Train Loss: {train_loss:.4f}")
     #  preprocess test data
     test_data, num_sessions = preprocess_data(
         path=test_path,
