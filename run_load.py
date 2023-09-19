@@ -188,7 +188,7 @@ def train_and_eval(args: argparse.Namespace,
     test_data, stat = load_features(test_path,
                                     is_train=False)
 
-    test_data = test_data[:1000]
+    test_data = test_data[:500]
     log.set_test_data(test_data)
     train_loss = None
     if args.update:
@@ -240,6 +240,7 @@ def train_and_eval(args: argparse.Namespace,
         sequential=args.sequential,
         logger=logger
     )
+    print("eventIds: ", eventIds)
 
     log.set_valid_data(valid_data)
     log.set_lengths(len(train_data), len(valid_data), len(test_data))
