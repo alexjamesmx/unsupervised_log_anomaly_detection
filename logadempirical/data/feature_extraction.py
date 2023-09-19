@@ -23,6 +23,7 @@ def load_features(data_path, min_len=0, is_train=True, log=Log()):
     with open(data_path, 'rb') as f:
         data = pickle.load(f)
 
+    print("data ", data[0])
     if is_train:
         logs = []
         no_abnormal = 0
@@ -61,7 +62,8 @@ def load_features(data_path, min_len=0, is_train=True, log=Log()):
     # length is the length of each log sequence (window type) at position 0 (list of events), where each log is an array of [eventTemplate, label].
     # In a nutshell, it is the length of the log sequence
 
-    logs_len = [len(log[0]) for log in logs]
+    logs_len = [(log[1]) for log in logs]
+    print("logs_len ", logs_len)
     return logs, {"min": min(logs_len), "max": max(logs_len), "mean": np.mean(logs_len)}
 
 
