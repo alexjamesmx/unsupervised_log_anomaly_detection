@@ -42,11 +42,11 @@ if __name__ == "__main__":
 
     os.makedirs(args.output_dir, exist_ok=True)
     logger.info(f"Output directory: {args.output_dir}")
-    if args.is_train and not args.is_load:
+    if args.is_train and not args.is_load and not args.is_update:
         run_train(args, accelerator,  logger)
-    elif args.is_load and not args.is_train:
+    elif args.is_load and not args.is_train and not args.is_update:
         run_eval(args, accelerator, logger)
     elif args.is_update and not args.is_train and not args.is_load:
         run_update(args, accelerator, logger)
     else:
-        raise ValueError("Either train or load must be True")
+        raise ValueError("Either train, load or update must be True")

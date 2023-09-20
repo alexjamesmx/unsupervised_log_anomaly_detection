@@ -1,17 +1,12 @@
 import os
 import pickle
-from collections import Counter
-
 import torch
-import yaml
-from sklearn.utils import shuffle
+import argparse
+import numpy as np
 
 from accelerate import Accelerator
-import logging
+from typing import Tuple
 from logging import getLogger, Logger
-import argparse
-from typing import List, Tuple, Optional
-import numpy as np
 
 from logadempirical.data.data_loader import process_dataset
 from logadempirical.data.vocab import Vocab
@@ -22,6 +17,43 @@ from logadempirical.models import get_model, ModelConfig
 from logadempirical.trainer import Trainer
 from logadempirical.data.log import Log
 from logadempirical.data.preprocess import preprocess_data, preprocess_slidings
+
+
+def run_update(args, accelerator, logger):
+    if args.grouping == "sliding":
+        args.output_dir = f"{args.output_dir}{args.dataset_name}/sliding/W{args.window_size}_S{args.step_size}_C{args.is_chronological}_train{args.train_size}"
+
+    else:
+        args.output_dir = f"{args.output_dir}{args.dataset_name}/session/train{args.train_size}"
+
+    storeLog = Log(output_dir=args.output_dir)
+
+    train_path, test_path = process_dataset(logger, data_dir=args.data_dir, output_dir=args.output_dir,
+                                            log_file=args.log_file,
+                                            dataset_name=args.dataset_name, grouping=args.grouping,
+                                            window_size=args.window_size, step_size=args.step_size,
+                                            train_size=args.train_size, is_chronological=args.is_chronological,
+                                            session_type=args.session_level,
+                                            storeLog=storeLog)
+
+    os.makedirs(f"{args.output_dir}/vocabs", exist_ok=True)
+    vocab_path = f"{args.output_dir}/vocabs/{args.model_name}.pkl"
+
+    log_vocab = build_vocab(vocab_path,
+                            args.data_dir,
+                            train_path,
+                            args.embeddings,
+                            embedding_dim=args.embedding_dim,
+                            logger=logger)
+    model = build_model(args, vocab_size=len(log_vocab))
+    update(args,
+           train_path,
+           test_path,
+           log_vocab,
+           model,
+           storeLog=storeLog,
+           logger=logger,
+           accelerator=accelerator)
 
 
 def build_vocab(vocab_path: str,
@@ -74,6 +106,7 @@ def build_model(args, vocab_size):
 
     Returns
     -------
+    model: torch.nn.Module: Model
 
     """
     if args.model_name == "DeepLog":
@@ -106,7 +139,7 @@ def update(args: argparse.Namespace,
            test_path: str,
            vocab: Vocab,
            model: torch.nn.Module,
-           log: Log,
+           storeLog: Log,
            logger: Logger = getLogger("__name__"),
            accelerator: Accelerator = Accelerator()
            ) -> Tuple[float, float, float, float]:
@@ -127,13 +160,32 @@ def update(args: argparse.Namespace,
     """
     # Preprocess training data
 
-    # Build model
+    train_data, valid_data = preprocess_data(
+        path=train_path,
+        args=args,
+        is_train=True,
+        storeLog=storeLog,
+        logger=logger)
+
+    train_dataset, valid_dataset = preprocess_slidings(
+        train_data=train_data,
+        valid_data=valid_data,
+        vocab=vocab,
+        args=args,
+        is_train=True,
+        storeLog=storeLog,
+        logger=logger,
+    )
+
     optimizer = get_optimizer(args, model.parameters())
     device = accelerator.device
     model = model.to(device)
 
     trainer = Trainer(
         model,
+        train_dataset=train_dataset,
+        valid_dataset=valid_dataset,
+        is_train=True,
         optimizer=optimizer,
         no_epochs=args.max_epoch,
         batch_size=args.batch_size,
@@ -145,18 +197,38 @@ def update(args: argparse.Namespace,
         num_classes=len(vocab),
     )
 
-    logger.info(
-        f"Loading model from {args.output_dir}/models/{args.model_name}.pt")
-    logger.info(f"{model}\n")
+    session_labels = valid_dataset.get_session_labels()
 
+    logger.info(
+        f"Length of sessions labels: {len(session_labels)}, Length of valid dataset: {len(valid_dataset)}")
+
+    acc, recommend_topk = trainer.predict_unsupervised(valid_dataset,
+                                                       session_labels,
+                                                       topk=args.topk,
+                                                       device=device,
+                                                       is_valid=True)
+    logger.info(
+        f"Validation Result:: Acc: {acc:.4f}, Top-{args.topk} Recommendation: {recommend_topk}\n")
+
+    logger.info(
+        f"Loading model from {args.output_dir}/models/{args.model_name}.pt{model}\n")
+    logger.info(
+        f"Start update training {args.model_name} model on {device} device\n")
     trainer.load_model(f"{args.output_dir}/models/{args.model_name}.pt")
 
-    print("Updating model")
-    false_positive_data = log.get_test_data(
-        blockId="blk_-41265708926987771")
-    print(false_positive_data)
+    preprocess_data(
+        path=test_path,
+        args=args,
+        is_train=False,
+        storeLog=storeLog,
+        logger=logger)
+
+    false_positive_data = storeLog.get_test_data(
+        blockId="blk_-4915620745666827022")
+
     if len(false_positive_data) == 0:
         raise Exception("False positive with id = n is not found")
+
     sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels = sliding_window(
         false_positive_data,
         vocab=vocab,
@@ -169,86 +241,13 @@ def update(args: argparse.Namespace,
     )
     false_positive_dataset = LogDataset(
         sequentials, quantitatives, semantics, labels, sequence_idxs)
+    train_loss = 0
     train_loss, args.topk = trainer.train_on_false_positive(false_positive_dataset=false_positive_dataset,
                                                             device=device,
                                                             save_dir=f"{args.output_dir}/models",
                                                             model_name=args.model_name,
                                                             topk=args.topk)
+    storeLog.set_false_positives(false_positive_data)
     logger.info(f"UPDATED MODEL Train Loss: {train_loss:.4f}")
-    #  preprocess test data
-    test_data, num_sessions = preprocess_data(
-        path=test_path,
-        args=args,
-        is_train=False,
-        log=log,
-        logger=logger)
 
-    train_loss = None
-
-    test_dataset, eventIds = preprocess_slidings(
-        test_data=test_data,
-        vocab=vocab,
-        args=args,
-        is_train=False,
-        log=log,
-        logger=logger,
-    )
-    print(f"events ids: {eventIds}")
-
-    log.get_lenths()
-    log.get_train_sliding_window(length=True)
-    log.get_valid_sliding_window(length=True)
-    log.get_test_sliding_window(length=True)
-    # START PREDICTING
-    logger.info(
-        f"Start predicting {args.model_name} model on {device} device with top-{args.topk} recommendation")
-    acc, f1, pre, rec = trainer.predict_unsupervised(test_dataset,
-                                                     session_labels,
-                                                     eventIds=eventIds,
-                                                     topk=args.topk,
-                                                     device=device,
-                                                     is_valid=False,
-                                                     num_sessions=num_sessions,
-                                                     log=log
-                                                     )
-
-    logger.info(
-        f"Test Result:: Acc: {acc:.4f}, Precision: {pre:.4f}, Recall: {rec:.4f}, F1: {f1:.4f}")
-    return acc, f1, pre, rec
-
-
-def run_update(args, accelerator, logger):
-    if args.grouping == "sliding":
-        args.output_dir = f"{args.output_dir}{args.dataset_name}/sliding/W{args.window_size}_S{args.step_size}_C{args.is_chronological}_train{args.train_size}"
-
-    else:
-        args.output_dir = f"{args.output_dir}{args.dataset_name}/session/train{args.train_size}"
-
-    log = Log()
-
-    train_path, test_path = process_dataset(logger, data_dir=args.data_dir, output_dir=args.output_dir,
-                                            log_file=args.log_file,
-                                            dataset_name=args.dataset_name, grouping=args.grouping,
-                                            window_size=args.window_size, step_size=args.step_size,
-                                            train_size=args.train_size, is_chronological=args.is_chronological,
-                                            session_type=args.session_level,
-                                            log=log)
-
-    os.makedirs(f"{args.output_dir}/vocabs", exist_ok=True)
-    vocab_path = f"{args.output_dir}/vocabs/{args.model_name}.pkl"
-
-    log_vocab = build_vocab(vocab_path,
-                            args.data_dir,
-                            train_path,
-                            args.embeddings,
-                            embedding_dim=args.embedding_dim,
-                            logger=logger)
-    model = build_model(args, vocab_size=len(log_vocab))
-    update(args,
-           train_path,
-           test_path,
-           log_vocab,
-           model,
-           log,
-           logger=logger,
-           accelerator=accelerator)
+    print(storeLog.false_positives)

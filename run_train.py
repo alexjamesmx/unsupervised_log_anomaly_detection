@@ -24,6 +24,40 @@ from logadempirical.data.log import Log
 from logadempirical.data.preprocess import preprocess_data, preprocess_slidings
 
 
+def run_train(args, accelerator, logger):
+
+    if args.grouping == "sliding":
+        args.output_dir = f"{args.output_dir}{args.dataset_name}/sliding/W{args.window_size}_S{args.step_size}_C{args.is_chronological}_train{args.train_size}"
+
+    else:
+        args.output_dir = f"{args.output_dir}{args.dataset_name}/session/train{args.train_size}"
+    storeLog = Log()
+
+    train_path, test_path = process_dataset(logger, data_dir=args.data_dir, output_dir=args.output_dir,
+                                            log_file=args.log_file,
+                                            dataset_name=args.dataset_name, grouping=args.grouping,
+                                            window_size=args.window_size, step_size=args.step_size,
+                                            train_size=args.train_size, is_chronological=args.is_chronological,
+                                            session_type=args.session_level)
+    os.makedirs(f"{args.output_dir}/vocabs", exist_ok=True)
+    vocab_path = f"{args.output_dir}/vocabs/{args.model_name}.pkl"
+    log_vocab = build_vocab(vocab_path,
+                            args.data_dir,
+                            train_path,
+                            args.embeddings,
+                            embedding_dim=args.embedding_dim,
+                            logger=logger)
+    model = build_model(args, vocab_size=len(log_vocab))
+    train(args,
+          train_path,
+          test_path,
+          log_vocab,
+          model,
+          storeLog,
+          logger=logger,
+          accelerator=accelerator)
+
+
 def build_vocab(vocab_path: str,
                 data_dir: str,
                 train_path: str,
@@ -125,48 +159,7 @@ def train(args: argparse.Namespace,
     -------
     Accuracy metrics
     """
-    # data, stat = load_features(train_path,
-    #                            is_train=True)
 
-    # logger.info(f"Main: log sequences statistics: {stat}")
-    # data = shuffle(data)
-    # logger.info(f"Main: log sequences length: {str(len(data))}")
-    # n_valid = int(len(data) * args.valid_ratio)
-    # train_data, valid_data = data[:-n_valid], data[-n_valid:]
-
-    # logger.info(
-    #     f"Main: ,training, valid size: {len(train_data)}, {str(n_valid)} where valid ratio is {args.valid_ratio}")
-
-    # print("\nBuilding train dataset\n")
-    # sequentials, quantitatives, semantics, labels, idxs, _ = sliding_window(
-    #     train_data,
-    #     vocab=vocab,
-    #     window_size=args.history_size,
-    #     is_train=True,
-    #     semantic=args.semantic,
-    #     quantitative=args.quantitative,
-    #     sequential=args.sequential,
-    #     logger=logger
-    # )
-
-    # train_dataset = LogDataset(
-    #     sequentials, quantitatives, semantics, labels, idxs)
-    # print("\nBuilding valid dataset\n")
-    # sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels = sliding_window(
-    #     valid_data,
-    #     vocab=vocab,
-    #     window_size=args.history_size,
-    #     is_train=True,
-    #     semantic=args.semantic,
-    #     quantitative=args.quantitative,
-    #     sequential=args.sequential,
-    #     logger=logger
-    # )
-    # valid_dataset = LogDataset(
-    #     sequentials, quantitatives, semantics, labels, sequence_idxs)
-    # logger.info(
-    #     f"Train dataset: {len(train_dataset)}, Valid dataset: {len(valid_dataset)}")
-    # Preprocess training data
     train_data, valid_data = preprocess_data(
         path=train_path,
         args=args,
@@ -225,39 +218,7 @@ def train(args: argparse.Namespace,
                                                        is_valid=True)
     logger.info(
         f"Validation Result:: Acc: {acc:.4f}, Top-{args.topk} Recommendation: {recommend_topk}\n")
-    # now load test data
-    # data, stat = load_features(test_path,
-    #                            is_train=False)
-    # logger.info(f"Test data statistics: {stat}")
-    # label_dict = {}
-    # counter = {}
-    # for (_,  s, l) in data:
-    #     label_dict[tuple(s)] = l
-    #     try:
-    #         counter[tuple(s)] += 1
-    #     except Exception:
-    #         counter[tuple(s)] = 1
 
-    # # Label dict e.g {('Receiving block <*> src: /<*> dest: /<*>', 'Receiving block <*> src: /<*> dest: /<*>', 'Receiving block <*> src: /<*> dest: /<*>', 'BLOCK* NameSystem.allocateBlock: <*> <*>', 'PacketResponder <*> for block <*> <*>', 'Received block <*> of size <*> from /<*>', 'BLOCK* NameSystem.addStoredBlock: blockMap updated: <*> is added to <*> size <*>', 'PacketResponder <*> for block <*> <*>', 'PacketResponder <*> for block <*> <*>', 'Received block <*> of size <*> from /<*>', 'Received block <*> of size <*> from /<*>', 'BLOCK* NameSystem.addStoredBlock: blockMap updated: <*> is added to <*> size <*>', 'BLOCK* NameSystem.addStoredBlock: blockMap updated: <*> is added to <*> size <*>', 'Verification succeeded for <*>', 'Verification succeeded for <*>', 'BLOCK* NameSystem.delete: <*> is added to invalidSet of <*>', 'BLOCK* NameSystem.delete: <*> is added to invalidSet of <*>', 'BLOCK* NameSystem.delete: <*> is added to invalidSet of <*>', 'Deleting block <*> file <*>', 'Deleting block <*> file <*>', 'Deleting block <*> file <*>'): 0,...}
-    # data = [(list(k), v) for k, v in label_dict.items()]
-    # # num_sessions = [n,n,n,n] where n is the number of times a session appears in the test data
-    # num_sessions = [counter[tuple(k)] for k, _ in data]
-
-    # sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels = sliding_window(
-    #     data,
-    #     vocab=vocab,
-    #     window_size=args.history_size,
-    #     is_train=False,
-    #     semantic=args.semantic,
-    #     quantitative=args.quantitative,
-    #     sequential=args.sequential,
-    #     logger=logger
-    # )
-
-    # test_dataset = LogDataset(
-    #     sequentials, quantitatives, semantics, labels, sequence_idxs)
-    # logger.info(f"Test dataset: {len(test_dataset)}")
-    #  preprocess test data
     test_data, num_sessions = preprocess_data(
         path=test_path,
         args=args,
@@ -298,37 +259,3 @@ def train(args: argparse.Namespace,
     logger.info(
         f"window size: {args.window_size}, history size: {args.history_size}")
     return acc, f1, pre, rec
-
-
-def run_train(args, accelerator, logger):
-
-    if args.grouping == "sliding":
-        args.output_dir = f"{args.output_dir}{args.dataset_name}/sliding/W{args.window_size}_S{args.step_size}_C{args.is_chronological}_train{args.train_size}"
-
-    else:
-        args.output_dir = f"{args.output_dir}{args.dataset_name}/session/train{args.train_size}"
-    storeLog = Log()
-
-    train_path, test_path = process_dataset(logger, data_dir=args.data_dir, output_dir=args.output_dir,
-                                            log_file=args.log_file,
-                                            dataset_name=args.dataset_name, grouping=args.grouping,
-                                            window_size=args.window_size, step_size=args.step_size,
-                                            train_size=args.train_size, is_chronological=args.is_chronological,
-                                            session_type=args.session_level)
-    os.makedirs(f"{args.output_dir}/vocabs", exist_ok=True)
-    vocab_path = f"{args.output_dir}/vocabs/{args.model_name}.pkl"
-    log_vocab = build_vocab(vocab_path,
-                            args.data_dir,
-                            train_path,
-                            args.embeddings,
-                            embedding_dim=args.embedding_dim,
-                            logger=logger)
-    model = build_model(args, vocab_size=len(log_vocab))
-    train(args,
-          train_path,
-          test_path,
-          log_vocab,
-          model,
-          storeLog,
-          logger=logger,
-          accelerator=accelerator)

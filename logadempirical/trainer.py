@@ -11,11 +11,13 @@ from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_sc
 from itertools import chain
 from logadempirical.data.log import Log
 
+from logadempirical.data.dataset import LogDataset
+
 
 class Trainer:
     def __init__(self, model,
-                 train_dataset,
-                 valid_dataset,
+                 train_dataset: LogDataset,
+                 valid_dataset: LogDataset,
                  is_train=True,
                  optimizer: torch.optim.Optimizer = None,
                  no_epochs: int = 100,
@@ -44,7 +46,11 @@ class Trainer:
         self.num_classes = num_classes
         self.scheduler = None
 
-    def _train_epoch(self, train_loader: DataLoader, device: str, scheduler: Any, progress_bar: Any):
+    def _train_epoch(self,
+                     train_loader: DataLoader,
+                     device: str,
+                     scheduler: Any,
+                     progress_bar: Any):
         self.model.train()
         self.optimizer.zero_grad()
         total_loss = 0
@@ -64,7 +70,10 @@ class Trainer:
 
         return total_loss / len(train_loader)
 
-    def _valid_epoch(self, val_loader: DataLoader, device: str, topk: int = 1):
+    def _valid_epoch(self,
+                     val_loader: DataLoader,
+                     device: str,
+                     topk: int = 1):
         self.model.eval()
         y_pred = []
         y_true = []
@@ -97,7 +106,11 @@ class Trainer:
             acc = accuracy_score(y_true, np.argmax(y_pred, axis=1))
         return loss, acc, 1
 
-    def train(self, device: str = 'cpu', save_dir: str = None, model_name: str = None, topk: int = 1):
+    def train(self,
+              device: str = 'cpu',
+              save_dir: str = None,
+              model_name: str = None,
+              topk: int = 9):
         train_loader = DataLoader(
             self.train_dataset, batch_size=self.batch_size, shuffle=True)
         val_loader = DataLoader(
@@ -129,8 +142,6 @@ class Trainer:
             if self.logger is not None:
                 self.logger.debug(
                     f"Epoch {epoch + 1}||Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f} - Val Acc: {val_acc:.4f}")
-                print(
-                    f"Epoch {epoch + 1}||Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f} - Val Acc: {val_acc:.4f}")
             total_train_loss += train_loss
             total_val_loss += val_loss
             total_val_acc += val_acc
@@ -144,7 +155,7 @@ class Trainer:
         # return total_train_loss / self.no_epochs, val_loss, val_acc, topk
 
     def predict_unsupervised(self,
-                             dataset,
+                             dataset: LogDataset,
                              y_true,
                              topk: int,
                              device: str = 'cpu',
@@ -266,7 +277,12 @@ class Trainer:
         progress_bar.close()
         return acc, f1, pre, rec
 
-    def train_on_false_positive(self, false_positive_dataset, device: str = 'cpu', save_dir: str = None, model_name: str = None, topk: int = 1):
+    def train_on_false_positive(self,
+                                false_positive_dataset: LogDataset,
+                                device: str = 'cpu',
+                                save_dir: str = None,
+                                model_name: str = None,
+                                topk: int = 9):
         train_loader = DataLoader(
             false_positive_dataset, batch_size=self.batch_size, shuffle=True)
         self.model.to(device)
@@ -288,6 +304,7 @@ class Trainer:
         total_train_loss = 0
 
         for epoch in range(self.no_epochs):
+            print(f"Epoch {epoch + 1}")
             train_loss = self._train_epoch(
                 train_loader, device, self.scheduler, progress_bar)
             total_train_loss += train_loss

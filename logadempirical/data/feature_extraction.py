@@ -7,7 +7,7 @@ import sys
 from logadempirical.data.log import Log
 
 
-def load_features(data_path, min_len=0, is_train=True, log=Log()):
+def load_features(data_path, min_len=0, is_train=True, log=Log):
     """
     Load features from pickle file
     Parameters

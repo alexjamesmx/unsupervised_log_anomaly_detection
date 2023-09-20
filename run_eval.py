@@ -17,6 +17,56 @@ from logadempirical.data.log import Log
 from logadempirical.data.preprocess import preprocess_data, preprocess_slidings
 
 
+def run_eval(args, accelerator, logger):
+    """
+    Load and evaluate a pre-trained model for log anomaly detection.
+
+    Parameters
+    ----------
+    args (argparse.Namespace): Command-line arguments and configuration.
+    accelerator (Accelerator): Hardware accelerator for training.
+    logger (Logger): Logger for recording log messages.
+
+    Returns
+    ----------
+    None
+    """
+    if args.grouping == "sliding":
+        args.output_dir = f"{args.output_dir}{args.dataset_name}/sliding/W{args.window_size}_S{args.step_size}_C{args.is_chronological}_train{args.train_size}"
+
+    else:
+        args.output_dir = f"{args.output_dir}{args.dataset_name}/session/train{args.train_size}"
+
+    storeLog = Log(output_dir=args.output_dir)
+
+    train_path, test_path = process_dataset(logger, data_dir=args.data_dir, output_dir=args.output_dir,
+                                            log_file=args.log_file,
+                                            dataset_name=args.dataset_name, grouping=args.grouping,
+                                            window_size=args.window_size, step_size=args.step_size,
+                                            train_size=args.train_size, is_chronological=args.is_chronological,
+                                            session_type=args.session_level,
+                                            storeLog=storeLog)
+
+    os.makedirs(f"{args.output_dir}/vocabs", exist_ok=True)
+    vocab_path = f"{args.output_dir}/vocabs/{args.model_name}.pkl"
+
+    log_vocab = build_vocab(vocab_path,
+                            args.data_dir,
+                            train_path,
+                            args.embeddings,
+                            embedding_dim=args.embedding_dim,
+                            logger=logger)
+    model = build_model(args, vocab_size=len(log_vocab))
+    eval(args,
+         train_path,
+         test_path,
+         log_vocab,
+         model,
+         storeLog,
+         logger=logger,
+         accelerator=accelerator)
+
+
 def build_vocab(vocab_path: str,
                 data_dir: str,
                 train_path: str,
@@ -118,23 +168,6 @@ def eval(args: argparse.Namespace,
     -------
     Accuracy metrics
     """
-    # Preprocess training data
-    train_data, valid_data = preprocess_data(
-        path=train_path,
-        args=args,
-        is_train=True,
-        storeLog=storeLog,
-        logger=logger)
-
-    train_dataset, valid_dataset = preprocess_slidings(
-        train_data=train_data,
-        valid_data=valid_data,
-        vocab=vocab,
-        args=args,
-        is_train=True,
-        storeLog=storeLog,
-        logger=logger,
-    )
 
     # Build model
     optimizer = get_optimizer(args, model.parameters())
@@ -143,8 +176,8 @@ def eval(args: argparse.Namespace,
 
     trainer = Trainer(
         model,
-        train_dataset=train_dataset,
-        valid_dataset=valid_dataset,
+        train_dataset=[],
+        valid_dataset=[],
         is_train=True,
         optimizer=optimizer,
         no_epochs=args.max_epoch,
@@ -162,17 +195,6 @@ def eval(args: argparse.Namespace,
     logger.info(f"{model}\n")
 
     trainer.load_model(f"{args.output_dir}/models/{args.model_name}.pt")
-
-    session_labels = valid_dataset.get_session_labels()
-
-    # Recommend top-k
-    acc, recommend_topk = trainer.predict_unsupervised(valid_dataset,
-                                                       session_labels,
-                                                       topk=args.topk,
-                                                       device=device,
-                                                       is_valid=True)
-    logger.info(
-        f"Validation Result:: Acc: {acc:.4f}, Top-{args.topk} Recommendation: {recommend_topk}")
 
     #  preprocess test data
     test_data, num_sessions = preprocess_data(
@@ -193,10 +215,10 @@ def eval(args: argparse.Namespace,
 
     session_labels = test_dataset.session_labels
 
-    storeLog.get_lenths()
-    storeLog.get_train_sliding_window(length=True)
-    storeLog.get_valid_sliding_window(length=True)
-    storeLog.get_test_sliding_window(length=True)
+    # storeLog.lengths
+    # storeLog.get_train_sliding_window(length=True)
+    # storeLog.get_valid_sliding_window(length=True)
+    # storeLog.get_test_sliding_window(length=True)
     logger.info(
         f"Start predicting {args.model_name} model on {device} device with top-{args.topk} recommendation")
     acc, f1, pre, rec = trainer.predict_unsupervised(test_dataset,
@@ -212,53 +234,3 @@ def eval(args: argparse.Namespace,
     logger.info(
         f"Test Result:: Acc: {acc:.4f}, Precision: {pre:.4f}, Recall: {rec:.4f}, F1: {f1:.4f}")
     return acc, f1, pre, rec
-
-
-def run_eval(args, accelerator, logger):
-    """
-    Load and evaluate a pre-trained model for log anomaly detection.
-
-    Parameters
-    ----------
-    args (argparse.Namespace): Command-line arguments and configuration.
-    accelerator (Accelerator): Hardware accelerator for training.
-    logger (Logger): Logger for recording log messages.
-
-    Returns
-    ----------
-    None
-    """
-    if args.grouping == "sliding":
-        args.output_dir = f"{args.output_dir}{args.dataset_name}/sliding/W{args.window_size}_S{args.step_size}_C{args.is_chronological}_train{args.train_size}"
-
-    else:
-        args.output_dir = f"{args.output_dir}{args.dataset_name}/session/train{args.train_size}"
-
-    storeLog = Log()
-
-    train_path, test_path = process_dataset(logger, data_dir=args.data_dir, output_dir=args.output_dir,
-                                            log_file=args.log_file,
-                                            dataset_name=args.dataset_name, grouping=args.grouping,
-                                            window_size=args.window_size, step_size=args.step_size,
-                                            train_size=args.train_size, is_chronological=args.is_chronological,
-                                            session_type=args.session_level,
-                                            storeLog=storeLog)
-
-    os.makedirs(f"{args.output_dir}/vocabs", exist_ok=True)
-    vocab_path = f"{args.output_dir}/vocabs/{args.model_name}.pkl"
-
-    log_vocab = build_vocab(vocab_path,
-                            args.data_dir,
-                            train_path,
-                            args.embeddings,
-                            embedding_dim=args.embedding_dim,
-                            logger=logger)
-    model = build_model(args, vocab_size=len(log_vocab))
-    eval(args,
-         train_path,
-         test_path,
-         log_vocab,
-         model,
-         storeLog,
-         logger=logger,
-         accelerator=accelerator)

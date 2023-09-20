@@ -1,15 +1,14 @@
 from pprint import pprint
 
+import os
+import pickle
+
 
 class Log(object):
-    _instance = None
 
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(Log, cls).__new__(cls)
-        return cls._instance
-
-    def __init__(self):
+    def __init__(self,
+                 output_dir: str = 'path'):
+        self.output_dir = output_dir
 
         self.logs = None
         self.lengths = {
@@ -71,6 +70,17 @@ class Log(object):
         self.test_data = []
         self.valid_data = []
         self.original_data = []
+
+        self.false_positives = []
+
+        if os.path.exists(os.path.join(output_dir, "false_positives.pkl")):
+            data_path = os.path.join(output_dir, "false_positives.pkl")
+            with open(data_path, 'rb') as f:
+                self.false_positives = pickle.load(f)
+                print("False positives loaded from: ",
+                      data_path, "\n")
+        else:
+            print("False positives not found in: ", output_dir)
 
     def set_lengths(self, train_length=None, valid_length=None, test_length=None):
         if test_length:
@@ -176,12 +186,6 @@ class Log(object):
             print("Test slidings:")
             pprint(self.test_sliding_window)
 
-    def get_lenths(self):
-        print(self.lengths)
-
-    def get_all_logs(self):
-        return self.logs
-
     def set_train_data(self, logs):
         self.train_data = logs
 
@@ -262,3 +266,16 @@ class Log(object):
             return [log for log in self.original_data if log["SessionId"] == "41265708926987771"]
         else:
             return self.original_data
+
+    def set_false_positives(self, logs):
+        existing_ids = set(item[0] for item in self.false_positives)
+
+        # Add only the new logs that have unique identifiers
+        new_false_positives = [
+            log for log in logs if log[0] not in existing_ids]
+
+        # Update the false positives list
+        self.false_positives.extend(new_false_positives)
+
+        with open(os.path.join(self.output_dir, "false_positives.pkl"), mode="wb") as f:
+            pickle.dump(self.false_positives, f)
