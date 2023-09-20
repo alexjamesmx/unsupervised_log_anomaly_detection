@@ -192,7 +192,6 @@ def eval(args: argparse.Namespace,
     )
 
     session_labels = test_dataset.session_labels
-    print(f"events ids: {eventIds}")
 
     storeLog.get_lenths()
     storeLog.get_train_sliding_window(length=True)

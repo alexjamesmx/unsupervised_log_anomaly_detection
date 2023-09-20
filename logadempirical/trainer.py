@@ -181,6 +181,7 @@ class Trainer:
                 test_loader, y_true, topk, device)
             return acc, find_topk(test_loader)
         else:
+            print(f"Event IDs: {len(eventIds)} ")
             return self.predict_unsupervised_helper(test_loader, y_true, topk, device, num_sessions, eventIds, storeLog=storeLog)
 
     def predict_unsupervised_helper(self, test_loader, y_true, topk: int, device: str = 'cpu',

@@ -275,7 +275,8 @@ def train(args: argparse.Namespace,
     )
 
     session_labels = test_dataset.session_labels
-    print(f"events ids: {eventIds}")
+    # print(
+    #     f"events ids lenegth: {len(eventIds)} length session labels: {len(session_labels)}")
 
     storeLog.get_lenths()
     storeLog.get_train_sliding_window(length=True)
@@ -288,7 +289,9 @@ def train(args: argparse.Namespace,
                                                      topk=args.topk,
                                                      device=device,
                                                      is_valid=False,
-                                                     num_sessions=num_sessions,)
+                                                     num_sessions=num_sessions,
+                                                     eventIds=eventIds
+                                                     )
 
     logger.info(
         f"Test Result:: Acc: {acc:.4f}, Precision: {pre:.4f}, Recall: {rec:.4f}, F1: {f1:.4f}")

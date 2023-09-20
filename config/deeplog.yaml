@@ -29,7 +29,7 @@ warmup_rate: 0.1 # range: from 0.01 to 0.2
 # training configuration
 accumulation_step: 1 # range: from 1 to 10
 batch_size: 2048 # range: from 32 to 4096
-max_epoch: 10 # range: from 1 to 100
+max_epoch: 1 # range: from 1 to 100
 
 # common configuration
 output_dir: ./output/
@@ -37,8 +37,8 @@ step_size: 1
 train_size: 0.01
 valid_ratio: 0.1
 window_size: 10
-is_load: false
-is_train: true
+is_load: true
+is_train: false
 is_update: false
 #BGL
 # dataset configuration
