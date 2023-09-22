@@ -7,7 +7,7 @@ import sys
 from logadempirical.data.log import Log
 
 
-def load_features(data_path, min_len=0, is_train=True, log=Log):
+def load_features(data_path, min_len=0, is_train=True, storeLog=Log):
     """
     Load features from pickle file
     Parameters
@@ -22,6 +22,7 @@ def load_features(data_path, min_len=0, is_train=True, log=Log):
     """
     with open(data_path, 'rb') as f:
         data = pickle.load(f)
+        storeLog.set_original_data(logs=data)
 
     if is_train:
         logs = []

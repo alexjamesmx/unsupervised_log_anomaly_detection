@@ -237,7 +237,7 @@ class Trainer:
         if num_sessions is not None:
             print(f"Total sessions: {sum(num_sessions)}")
             print(
-                f"y_true: {len(y_true)} \ny_pred: {len(y_pred)}\nidxs: {len(idxs)}\neventIds: {len(eventIds)}")
+                f"y_true: {len(y_true)} y_pred: {len(y_pred)} idxs: {len(idxs)} eventIds: {len(eventIds)}")
             eventIds = [eventIds[idx] for idx in idxs]
             self.logger.info(f"Total sessions: {sum(num_sessions)}")
             y_pred = [[y_pred[idx]] * num_sessions[idx] for idx in idxs]
@@ -259,11 +259,12 @@ class Trainer:
             print(
                 f"Total labeled anomalies: {len(labeled_anomalies)} | Total predicted anomalies: {anomalies.shape} | Total unknown events: {len(y_pred)}")
 
-            # for idx in anomalies:
-            #     print(
-            #         f"Anomaly at session {idx + 1}, Event ID: {eventIds_replicated[idx]}")
-            # original_log = log.get_original_data(eventIds_replicated[idx])
-            # print(f"Anomaly at: {original_log}\n")
+            # for k, idx in enumerate(anomalies):
+            #     print(f"Anomaly {k+1} at: {eventIds_replicated[idx]}\n")
+
+            #     original_log = storeLog.get_original_data(
+            #         blockId=eventIds_replicated[idx])
+            #     print(f"Original log: {original_log}\n")
 
         else:
             y_pred = np.array([y_pred[idx] for idx in idxs])
