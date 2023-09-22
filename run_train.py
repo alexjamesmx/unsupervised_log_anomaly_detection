@@ -239,7 +239,7 @@ def train(args: argparse.Namespace,
     # print(
     #     f"events ids lenegth: {len(eventIds)} length session labels: {len(session_labels)}")
 
-    storeLog.get_lenths()
+    storeLog.lengths
     storeLog.get_train_sliding_window(length=True)
     storeLog.get_valid_sliding_window(length=True)
     storeLog.get_test_sliding_window(length=True)

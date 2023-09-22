@@ -215,10 +215,13 @@ def eval(args: argparse.Namespace,
 
     session_labels = test_dataset.session_labels
 
-    # storeLog.lengths
-    # storeLog.get_train_sliding_window(length=True)
-    # storeLog.get_valid_sliding_window(length=True)
-    # storeLog.get_test_sliding_window(length=True)
+    storeLog.lengths
+    storeLog.get_train_sliding_window(length=True)
+    storeLog.get_valid_sliding_window(length=True)
+    storeLog.get_test_sliding_window(length=True)
+    print(
+        f"eventIds: {len(eventIds)} - session_labels: {len(session_labels)}\n")
+
     logger.info(
         f"Start predicting {args.model_name} model on {device} device with top-{args.topk} recommendation")
     acc, f1, pre, rec = trainer.predict_unsupervised(test_dataset,

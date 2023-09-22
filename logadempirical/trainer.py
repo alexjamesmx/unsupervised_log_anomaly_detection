@@ -209,6 +209,28 @@ class Trainer:
             support_label = (batch['sequential'] >=
                              self.num_classes).any(dim=1)
 
+            sequentials = self.accelerator.gather(
+                batch['sequential']).detach().clone().cpu().numpy().tolist()
+
+            # detect unknown events which are not labeled as anomalies
+
+            # countUnknown = 0
+            # unique_sequences = []
+            # for seq in sequentials:
+            #     unk_event = any(x >= self.num_classes for x in seq)
+            #     if unk_event:
+            #         if eventIds[idxs[sequentials.index(seq)]] not in unique_sequences:
+            #             countUnknown += 1
+            #             unique_sequences.append(
+            #                 eventIds[idxs[sequentials.index(seq)]])
+
+            # print(
+            #     f"unique_sequences: {len(unique_sequences)} \n {unique_sequences}")
+            # # print("Unkown event detected in batch:", seq)
+            # # print(
+            # #     f"Session Idx: {sequentials.index(seq)}\n, {storeLog.get_original_data(eventIds[idxs[sequentials.index(seq)]])}\n")
+            # print("Number of unknown events: ", countUnknown)
+
             support_label = self.accelerator.gather(
                 support_label).cpu().numpy().tolist()
             batch_label = self.accelerator.gather(
@@ -226,9 +248,25 @@ class Trainer:
             # batch_label is a list that contains the next event label for each batch.
             # support_label is a list of Boolean values indicating whether each batch contains an unknown event.
 
+            unknown_sequences = []
             for idx, y_i, label_i, s_label in zip(idxs, y, batch_label, support_label):
                 # if the ground truth label is not among the top-k predicted labels for that session or if the session contains an unknown event then the session is labeled as an anomaly
                 y_pred[idx] = y_pred[idx] | (label_i not in y_i or s_label)
+
+                if s_label and eventIds[idx] not in unknown_sequences and label_i in y_i:
+                    # unknown_sequences.append(eventIds[idx])
+                    print(
+                        f"Unknown {idx} event at {eventIds[idx]}")
+
+                    for k, seq in enumerate(sequentials):
+                        if self.num_classes in seq and eventIds[idx] not in unknown_sequences:
+                            print(
+                                f"step: {k} sequence of {eventIds[idx]}: {seq}")
+                            unknown_sequences.append(eventIds[idx])
+
+                # if s_label == 1:
+                #     print(
+                #         f"Anomaly at {storeLog.get_original_data(eventIds[idx])}\n")
             progress_bar.update(1)
         progress_bar.close()
         idxs = list(y_pred.keys())
@@ -236,8 +274,8 @@ class Trainer:
 
         if num_sessions is not None:
             print(f"Total sessions: {sum(num_sessions)}")
-            print(
-                f"y_true: {len(y_true)} \ny_pred: {len(y_pred)}\nidxs: {len(idxs)}\neventIds: {len(eventIds)}")
+            # print(
+            #     f"y_true: {len(y_true)} \ny_pred: {len(y_pred)}\nidxs: {len(idxs)}\neventIds: {len(eventIds)}")
             eventIds = [eventIds[idx] for idx in idxs]
             self.logger.info(f"Total sessions: {sum(num_sessions)}")
             y_pred = [[y_pred[idx]] * num_sessions[idx] for idx in idxs]
@@ -245,26 +283,37 @@ class Trainer:
             y_pred = np.array(list(chain.from_iterable(y_pred)))
             y_true = np.array(list(chain.from_iterable(y_true)))
 
+            # print(
+            #     f"y_true: {y_true.shape} \ny_pred: {y_pred.shape} \neventIds: {len(eventIds)}")
+            # print(
+            #     f"first of y_true: {y_true[0]} \nfirst of y_pred: {y_pred[0]} \nfirst of eventIds: {eventIds[0]}")
+
             self.logger.info(f"Total sessions: {len(y_pred)}")
 
-            print(f"y_true: {y_true.shape} \ny_pred: {y_pred.shape}")
+            # print(f"y_true: {y_true.shape} \ny_pred: {y_pred.shape}")
             # Process y_true and y_pred
-            y_true_replicated = np.concatenate(
-                [np.repeat(t, n) for t, n in zip(y_true, num_sessions)])
-            y_pred_replicated = np.concatenate(
-                [np.repeat(p, n) for p, n in zip(y_pred, num_sessions)])
+            # y_true_replicated = np.concatenate(
+            #     [np.repeat(t, n) for t, n in zip(y_true, num_sessions)])
+            # y_pred_replicated = np.concatenate(
+            #     [np.repeat(p, n) for p, n in zip(y_pred, num_sessions)])
             eventIds_replicated = np.concatenate(
                 [np.repeat(e, n) for e, n in zip(eventIds, num_sessions)])
 
             # Find indices where both y_true and y_pred are equal to 1
-            anomalies = np.where((y_true_replicated == 1)
-                                 & (y_pred_replicated == 1))[0]
+            real_anomalies = np.where(y_true == 1)[0]
+            anomalies = np.where((y_true == 1)
+                                 & (y_pred == 1))[0]
 
+            unk_events = np.where(y_pred == 1)[0]
+
+            print(
+                f"Total real anomalies: {len(real_anomalies)}\nAnomalies detected: {len(anomalies)}\nAnomalies + unknown events: {len(unk_events)}\n")
+
+            # See anomalies as original logs
             for idx in anomalies:
-                print(
-                    f"Anomaly at session {idx + 1}, Event ID: {eventIds_replicated[idx]}")
-            # original_log = log.get_original_data(eventIds_replicated[idx])
-            # print(f"Anomaly at: {original_log}\n")
+                original_log = storeLog.get_original_data(
+                    eventIds_replicated[idx])
+                print(f"Anomaly {idx + 1} at: { eventIds_replicated[idx]}")
 
         else:
             y_pred = np.array([y_pred[idx] for idx in idxs])

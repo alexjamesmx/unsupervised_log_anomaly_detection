@@ -5,6 +5,7 @@ from logadempirical.data.feature_extraction import load_features, sliding_window
 from logadempirical.data.log import Log
 from sklearn.utils import shuffle
 from logadempirical.data.dataset import LogDataset
+import numpy as np
 
 
 def preprocess_data(path: str,
@@ -12,7 +13,7 @@ def preprocess_data(path: str,
                     is_train: bool,
                     storeLog: Log,
                     logger) -> Tuple[list, list] or list:
-    data, stat = load_features(path, is_train=is_train)
+    data, stat = load_features(path, is_train=is_train, storeLog=storeLog)
     phase_message = "train" if is_train else "test"
     logger.info(f"{phase_message} log sequences statistics: {stat}\n")
     if is_train:
@@ -25,20 +26,26 @@ def preprocess_data(path: str,
             valid_data))
         return train_data, valid_data
     else:
-        test_data = data
+        test_data = data[:20]
+        print("Total test data: ", len(test_data))
         storeLog.set_test_data(test_data)
         storeLog.set_lengths(test_length=len(test_data))
         label_dict = {}
         counter = {}
-        for (e, s, l) in test_data:
-            key = tuple(s)
-            label_dict[key] = [e, l]
+        for (k, e, l) in test_data:
+            key = tuple(e)
+            label_dict[key] = [k, l]
             try:
                 counter[key] += 1
             except Exception:
                 counter[key] = 1
         test_data = [(list(k), v) for k, v in label_dict.items()]
-        test_data = [(list(k), v) for k, v in test_data if v[1] == 1]
+
+        # HDFS UNCOMMENT THIS PART TO GET REAL ANOMALIES
+        # test_data = [(list(k), v) for k, v in test_data if v[1] == 1]
+        # BGL UNCOMMENT THIS PART TO GET REAL ANOMALIES
+        # test_data = [(list(k), v) for k, v in test_data if 1 in v[1]]
+
         print("REAL ANOMALIES HERE: ", len(test_data))
         num_sessions = [counter[tuple(k)] for k, _ in test_data]
         return test_data, num_sessions
