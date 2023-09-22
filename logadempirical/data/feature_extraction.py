@@ -22,7 +22,7 @@ def load_features(data_path, min_len=0, is_train=True, storeLog=Log):
     """
     with open(data_path, 'rb') as f:
         data = pickle.load(f)
-        storeLog.set_original_data(logs=data)
+    storeLog.set_original_data(data)
 
     if is_train:
         logs = []

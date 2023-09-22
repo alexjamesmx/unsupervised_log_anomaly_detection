@@ -262,7 +262,6 @@ class Log(object):
 
     def get_original_data(self, blockId=None):
         if blockId:
-            print("BlockId: ", blockId)
             return [log for log in self.original_data if log["SessionId"] == blockId]
         else:
             return self.original_data

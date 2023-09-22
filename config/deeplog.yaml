@@ -1,51 +1,8 @@
 #HDFS
 # dataset configuration
-# data_dir: ./dataset/HDFS
-# dataset_name: HDFS
-# log_file: HDFS.log
-# embeddings: embeddings_average.json
-
-# # data preprocessing
-# grouping: session
-# session_level: entry
-# sequential: true
-# semantic: false
-# quantitative: false
-# is_chronological: true
-# history_size: 10
-
-# # model configuration
-# model_name: DeepLog
-# embedding_dim: 300 # default: 300, can range: from 32 to 1024
-# dropout: 0.1 # dropout rate: from 0.0 to 0.5
-# hidden_size: 128 # hidden size: from 32 to 1024
-# num_layers: 2 # number of layers: from 1 to 8
-# topk: 9 # default
-
-# # optimizer configuration
-# scheduler: linear
-# warmup_rate: 0.1 # range: from 0.01 to 0.2
-
-# # training configuration
-# accumulation_step: 1 # range: from 1 to 10
-# batch_size: 2048 # range: from 32 to 4096
-# max_epoch: 10 # range: from 1 to 100
-
-# # common configuration
-# output_dir: ./output/
-# step_size: 1
-# train_size: 0.01
-# valid_ratio: 0.1
-# window_size: 10
-# is_load: true
-# is_train: false
-# is_update: false
-#BGL
-# dataset configuration
-data_dir: ./dataset/BGL
-output_dir: ./output/
-dataset_name: BGL
-log_file: BGL.log
+data_dir: ./dataset/HDFS
+dataset_name: HDFS
+log_file: HDFS.log
 embeddings: embeddings_average.json
 
 # data preprocessing
@@ -54,19 +11,18 @@ session_level: entry
 sequential: true
 semantic: false
 quantitative: false
-is_chronological: false
+is_chronological: true
 history_size: 10
 
 # model configuration
 model_name: DeepLog
-embedding_dim: 300 # embedding dimension: from 32 to 1024
+embedding_dim: 300 # default: 300, can range: from 32 to 1024
 dropout: 0.1 # dropout rate: from 0.0 to 0.5
 hidden_size: 128 # hidden size: from 32 to 1024
 num_layers: 2 # number of layers: from 1 to 8
-topk: 9 # keep default
+topk: 9 # default
 
 # optimizer configuration
-optimizer: adamw
 scheduler: linear
 warmup_rate: 0.1 # range: from 0.01 to 0.2
 
@@ -77,11 +33,54 @@ max_epoch: 10 # range: from 1 to 100
 
 # common configuration
 output_dir: ./output/
-load: false
 step_size: 1
-train_size: 0.1
+train_size: 0.01
 valid_ratio: 0.1
 window_size: 10
 is_load: true
 is_train: false
 is_update: false
+#BGL
+# dataset configuration
+# data_dir: ./dataset/BGL
+# output_dir: ./output/
+# dataset_name: BGL
+# log_file: BGL.log
+# embeddings: embeddings_average.json
+
+# # data preprocessing
+# grouping: session
+# session_level: entry
+# sequential: true
+# semantic: false
+# quantitative: false
+# is_chronological: false
+# history_size: 10
+
+# # model configuration
+# model_name: DeepLog
+# embedding_dim: 300 # embedding dimension: from 32 to 1024
+# dropout: 0.1 # dropout rate: from 0.0 to 0.5
+# hidden_size: 128 # hidden size: from 32 to 1024
+# num_layers: 2 # number of layers: from 1 to 8
+# topk: 9 # keep default
+
+# # optimizer configuration
+# optimizer: adamw
+# scheduler: linear
+# warmup_rate: 0.1 # range: from 0.01 to 0.2
+
+# # training configuration
+# accumulation_step: 1 # range: from 1 to 10
+# batch_size: 2048 # range: from 32 to 4096
+# max_epoch: 15 # range: from 1 to 100
+
+# # common configuration
+# output_dir: ./output/
+# step_size: 1
+# train_size: 0.1
+# valid_ratio: 0.1
+# window_size: 10
+# is_load: true
+# is_train: false
+# is_update: false

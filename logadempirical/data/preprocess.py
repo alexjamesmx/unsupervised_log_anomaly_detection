@@ -5,6 +5,7 @@ from logadempirical.data.feature_extraction import load_features, sliding_window
 from logadempirical.data.log import Log
 from sklearn.utils import shuffle
 from logadempirical.data.dataset import LogDataset
+import numpy as np
 
 
 def preprocess_data(path: str,
@@ -26,23 +27,26 @@ def preprocess_data(path: str,
             valid_data))
         return train_data, valid_data
     else:
-        test_data = data[:100]
+        test_data = data
+        print("Total test data: ", len(test_data))
         storeLog.set_test_data(test_data)
         storeLog.set_lengths(test_length=len(test_data))
         label_dict = {}
         counter = {}
-        for (e, s, l) in test_data:
-            key = tuple(s)
-            label_dict[key] = [e, l]
+        for (k, e, l) in test_data:
+            key = tuple(e)
+            label_dict[key] = [k, l]
             try:
                 counter[key] += 1
             except Exception:
                 counter[key] = 1
         test_data = [(list(k), v) for k, v in label_dict.items()]
-        # HDFS test anomalies
+
+        # HDFS UNCOMMENT THIS PART TO GET REAL ANOMALIES
         # test_data = [(list(k), v) for k, v in test_data if v[1] == 1]
-        # BGL test anomalies
+        # BGL UNCOMMENT THIS PART TO GET REAL ANOMALIES
         # test_data = [(list(k), v) for k, v in test_data if 1 in v[1]]
+
         print("REAL ANOMALIES HERE: ", len(test_data))
         num_sessions = [counter[tuple(k)] for k, _ in test_data]
         return test_data, num_sessions

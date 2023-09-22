@@ -192,7 +192,6 @@ class Trainer:
                 test_loader, y_true, topk, device)
             return acc, find_topk(test_loader)
         else:
-            print(f"Event IDs: {len(eventIds)} ")
             return self.predict_unsupervised_helper(test_loader, y_true, topk, device, num_sessions, eventIds, storeLog=storeLog)
 
     def predict_unsupervised_helper(self, test_loader, y_true, topk: int, device: str = 'cpu',
@@ -201,13 +200,21 @@ class Trainer:
                                     storeLog=Log,
                                     ) -> Tuple[float, float, float, float]:
         y_pred = {k: 0 for k in y_true.keys()}
+        # unknown_sequences = []
+        count_unk_events = {k: 0 for k in y_true.keys()}
+        count_predicted_anomalies = {k: 0 for k in y_true.keys()}
         progress_bar = tqdm(total=len(test_loader), desc=f"Predict",
                             disable=not self.accelerator.is_local_main_process)
+
+        print(f"Total labeled: {len(y_true)}")
         for batch in test_loader:
             idxs = self.accelerator.gather(
                 batch['idx']).detach().clone().cpu().numpy().tolist()
             support_label = (batch['sequential'] >=
                              self.num_classes).any(dim=1)
+
+            sequentials = self.accelerator.gather(
+                batch['sequential']).detach().clone().cpu().numpy().tolist()
 
             support_label = self.accelerator.gather(
                 support_label).cpu().numpy().tolist()
@@ -228,16 +235,36 @@ class Trainer:
 
             for idx, y_i, label_i, s_label in zip(idxs, y, batch_label, support_label):
                 # if the ground truth label is not among the top-k predicted labels for that session or if the session contains an unknown event then the session is labeled as an anomaly
-                y_pred[idx] = y_pred[idx] | (label_i not in y_i or s_label)
+                if s_label == 1 and y_pred[idx] == 0:
+                    y_pred[idx] = s_label
+                    count_unk_events[idx] = s_label
+                elif y_pred[idx] == 0:
+                    y_pred[idx] = y_pred[idx] | (label_i not in y_i)
+                    if y_pred[idx] == 1:
+                        count_predicted_anomalies[idx] = 1
+
+                # sequentials_idx = [seq for k, seq in enumerate(
+                #     sequentials) if idxs[k] == idx]
+
+                # if prediction is normal and the session contains an unknown event then get all unknown events which are labeled as anomalies
+                # if s_label and eventIds[idx] not in unknown_sequences and label_i in y_i:
+                #     # TODO if new event in w=10, len(arr)=15, steps = 5 then it may be repeated {1-5} times, this can be optimized
+                #     for k, seq in enumerate(sequentials_idx):
+                #         if self.num_classes in seq and eventIds[idx] not in unknown_sequences:
+                #             # k is the sequence step, seq is the sequence and eventIds[idx] is the SessionId. We want to find the new events that are not in the vocabulary and when they appear.
+                #             unknown_sequences.append(eventIds[idx])
+
             progress_bar.update(1)
         progress_bar.close()
         idxs = list(y_pred.keys())
+        # unknown_sequences = list(set(unknown_sequences))
+        # print(f"unknown_sequences: {len(unknown_sequences)}")
         self.logger.info(f"Computing metrics...")
 
         if num_sessions is not None:
             print(f"Total sessions: {sum(num_sessions)}")
-            print(
-                f"y_true: {len(y_true)} y_pred: {len(y_pred)} idxs: {len(idxs)} eventIds: {len(eventIds)}")
+            # print(
+            #     f"y_true: {len(y_true)} \ny_pred: {len(y_pred)}\nidxs: {len(idxs)}\neventIds: {len(eventIds)}")
             eventIds = [eventIds[idx] for idx in idxs]
             self.logger.info(f"Total sessions: {sum(num_sessions)}")
             y_pred = [[y_pred[idx]] * num_sessions[idx] for idx in idxs]
@@ -245,26 +272,60 @@ class Trainer:
             y_pred = np.array(list(chain.from_iterable(y_pred)))
             y_true = np.array(list(chain.from_iterable(y_true)))
 
+            count_predicted_anomalies = [
+                [count_predicted_anomalies[idx]] * num_sessions[idx] for idx in idxs]
+            count_unk_events = [[count_unk_events[idx]]
+                                * num_sessions[idx] for idx in idxs]
+
+            count_predicted_anomalies = np.array(
+                list(chain.from_iterable(count_predicted_anomalies)))
+            count_unk_events = np.array(
+                list(chain.from_iterable(count_unk_events)))
+
+            # print(
+            #     f"y_true: {y_true.shape} \ny_pred: {y_pred.shape} \neventIds: {len(eventIds)}")
+            # print(
+            #     f"first of y_true: {y_true[0]} \nfirst of y_pred: {y_pred[0]} \nfirst of eventIds: {eventIds[0]}")
+
             self.logger.info(f"Total sessions: {len(y_pred)}")
 
-            print(f"y_true: {y_true.shape} \ny_pred: {y_pred.shape}")
+            # print(f"y_true: {y_true.shape} \ny_pred: {y_pred.shape}")
+            # Process y_true and y_pred
+            # y_true_replicated = np.concatenate(
+            #     [np.repeat(t, n) for t, n in zip(y_true, num_sessions)])
+            # y_pred_replicated = np.concatenate(
+            #     [np.repeat(p, n) for p, n in zip(y_pred, num_sessions)])
             eventIds_replicated = np.concatenate(
                 [np.repeat(e, n) for e, n in zip(eventIds, num_sessions)])
 
             # Find indices where both y_true and y_pred are equal to 1
+            real_anomalies = np.where(y_true == 1)[0]
             anomalies = np.where((y_true == 1)
                                  & (y_pred == 1))[0]
-            labeled_anomalies = np.where(y_true == 1)[0]
+
+            y_pred_as_anomalies = np.where(y_pred == 1)[0]
+
+            count_unk_events = np.where(np.array(count_unk_events) == 1)[0]
+            count_predicted_anomalies = np.where(
+                np.array(count_predicted_anomalies) == 1)[0]
+
+            missed_anomalies_indices = np.setdiff1d(real_anomalies, anomalies)
+            see_missed = storeLog.get_original_data(
+                eventIds_replicated[missed_anomalies_indices[0]])
+            print('Missed anomalies:', see_missed)
+            print(y_pred[missed_anomalies_indices[0]])
 
             print(
-                f"Total labeled anomalies: {len(labeled_anomalies)} | Total predicted anomalies: {anomalies.shape} | Total unknown events: {len(y_pred)}")
+                f"[Total_real_anomalies/true positives: {len(real_anomalies)} / {len(anomalies)}] [unknown events: {len(count_unk_events)}] [predicted anomalies: {len(count_predicted_anomalies)}] [total_pred: {len(y_pred_as_anomalies)}]\n")
 
-            # for k, idx in enumerate(anomalies):
-            #     print(f"Anomaly {k+1} at: {eventIds_replicated[idx]}\n")
+            print(f"Y true {len(y_true)} Y pred {len(y_pred)}")
 
+            # See anomalies as original logs
+            # for idx in anomalies:
             #     original_log = storeLog.get_original_data(
-            #         blockId=eventIds_replicated[idx])
-            #     print(f"Original log: {original_log}\n")
+            #         eventIds_replicated[idx])
+            # print(f"Anomaly {idx + 1} at: { eventIds_replicated[idx]}")
+            # print(f"Original log: {original_log}\n")
 
         else:
             y_pred = np.array([y_pred[idx] for idx in idxs])
