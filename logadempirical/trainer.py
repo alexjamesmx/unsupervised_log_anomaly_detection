@@ -248,21 +248,20 @@ class Trainer:
             self.logger.info(f"Total sessions: {len(y_pred)}")
 
             print(f"y_true: {y_true.shape} \ny_pred: {y_pred.shape}")
-            # Process y_true and y_pred
-            y_true_replicated = np.concatenate(
-                [np.repeat(t, n) for t, n in zip(y_true, num_sessions)])
-            y_pred_replicated = np.concatenate(
-                [np.repeat(p, n) for p, n in zip(y_pred, num_sessions)])
             eventIds_replicated = np.concatenate(
                 [np.repeat(e, n) for e, n in zip(eventIds, num_sessions)])
 
             # Find indices where both y_true and y_pred are equal to 1
-            anomalies = np.where((y_true_replicated == 1)
-                                 & (y_pred_replicated == 1))[0]
+            anomalies = np.where((y_true == 1)
+                                 & (y_pred == 1))[0]
+            labeled_anomalies = np.where(y_true == 1)[0]
 
-            for idx in anomalies:
-                print(
-                    f"Anomaly at session {idx + 1}, Event ID: {eventIds_replicated[idx]}")
+            print(
+                f"Total labeled anomalies: {len(labeled_anomalies)} | Total predicted anomalies: {anomalies.shape} | Total unknown events: {len(y_pred)}")
+
+            # for idx in anomalies:
+            #     print(
+            #         f"Anomaly at session {idx + 1}, Event ID: {eventIds_replicated[idx]}")
             # original_log = log.get_original_data(eventIds_replicated[idx])
             # print(f"Anomaly at: {original_log}\n")
 

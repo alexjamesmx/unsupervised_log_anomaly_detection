@@ -14,6 +14,7 @@ def preprocess_data(path: str,
                     logger) -> Tuple[list, list] or list:
     data, stat = load_features(path, is_train=is_train)
     phase_message = "train" if is_train else "test"
+    print(f"{phase_message} data length: ", len(data))
     logger.info(f"{phase_message} log sequences statistics: {stat}\n")
     if is_train:
         data = shuffle(data)
@@ -38,7 +39,7 @@ def preprocess_data(path: str,
             except Exception:
                 counter[key] = 1
         test_data = [(list(k), v) for k, v in label_dict.items()]
-        test_data = [(list(k), v) for k, v in test_data if v[1] == 1]
+        # test_data = [(list(k), v) for k, v in test_data if v[1] == 1]
         print("REAL ANOMALIES HERE: ", len(test_data))
         num_sessions = [counter[tuple(k)] for k, _ in test_data]
         return test_data, num_sessions
