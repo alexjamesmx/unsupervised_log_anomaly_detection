@@ -95,6 +95,7 @@ class Trainer:
         y_true = np.concatenate(y_true)
 
         loss = np.mean(losses)
+
         if topk > 1:
             for k in range(1, self.num_classes + 1):
                 acc = top_k_accuracy_score(
@@ -238,10 +239,11 @@ class Trainer:
                 if s_label == 1 and y_pred[idx] == 0:
                     y_pred[idx] = s_label
                     count_unk_events[idx] = s_label
+                    count_predicted_anomalies[idx] = 0
                 elif y_pred[idx] == 0:
                     y_pred[idx] = y_pred[idx] | (label_i not in y_i)
-                    if y_pred[idx] == 1:
-                        count_predicted_anomalies[idx] = 1
+                    count_predicted_anomalies[idx] = y_pred[idx]
+                    count_unk_events[idx] = 0
 
                 # sequentials_idx = [seq for k, seq in enumerate(
                 #     sequentials) if idxs[k] == idx]
@@ -257,76 +259,77 @@ class Trainer:
             progress_bar.update(1)
         progress_bar.close()
         idxs = list(y_pred.keys())
-        # unknown_sequences = list(set(unknown_sequences))
-        # print(f"unknown_sequences: {len(unknown_sequences)}")
         self.logger.info(f"Computing metrics...")
 
         if num_sessions is not None:
-            print(f"Total sessions: {sum(num_sessions)}")
-            # print(
-            #     f"y_true: {len(y_true)} \ny_pred: {len(y_pred)}\nidxs: {len(idxs)}\neventIds: {len(eventIds)}")
-            eventIds = [eventIds[idx] for idx in idxs]
             self.logger.info(f"Total sessions: {sum(num_sessions)}")
+            # --TESTING ONLY------
+            print("Number of sessions: ", num_sessions)
+            print(
+                f"\ncount unk events: {count_unk_events} total {sum(count_unk_events.values())}")
+            print(
+                f"count predicted: {count_predicted_anomalies} total {sum(count_predicted_anomalies.values())}")
+            test = np.array([v for _, v in y_true.items()])
+            print("real anomalies: ", test, " total ", sum(test), "\n")
+            test2 = np.array([v for _, v in count_predicted_anomalies.items()])
+            test3 = np.array([v for _, v in count_unk_events.items()])
+            missed_anomalies_indices = np.where(
+                (test == 1) & (test2 == 0))[0]
+            print("missed anomalies indices: ", missed_anomalies_indices)
+            unk_anomalies_indices = np.where(
+                (test == 1) & (test3 == 1))[0]
+            print("unk indices: ", unk_anomalies_indices, "\n")
+            # -----------------
+            eventIds = [eventIds[idx] for idx in idxs]
+            eventIds_replicated = np.concatenate(
+                [np.repeat(e, n) for e, n in zip(eventIds, num_sessions)])
             y_pred = [[y_pred[idx]] * num_sessions[idx] for idx in idxs]
             y_true = [[y_true[idx]] * num_sessions[idx] for idx in idxs]
-            y_pred = np.array(list(chain.from_iterable(y_pred)))
-            y_true = np.array(list(chain.from_iterable(y_true)))
-
             count_predicted_anomalies = [
                 [count_predicted_anomalies[idx]] * num_sessions[idx] for idx in idxs]
             count_unk_events = [[count_unk_events[idx]]
                                 * num_sessions[idx] for idx in idxs]
 
+            y_pred = np.array(list(chain.from_iterable(y_pred)))
+            y_true = np.array(list(chain.from_iterable(y_true)))
             count_predicted_anomalies = np.array(
                 list(chain.from_iterable(count_predicted_anomalies)))
             count_unk_events = np.array(
                 list(chain.from_iterable(count_unk_events)))
 
-            # print(
-            #     f"y_true: {y_true.shape} \ny_pred: {y_pred.shape} \neventIds: {len(eventIds)}")
-            # print(
-            #     f"first of y_true: {y_true[0]} \nfirst of y_pred: {y_pred[0]} \nfirst of eventIds: {eventIds[0]}")
-
-            self.logger.info(f"Total sessions: {len(y_pred)}")
-
-            # print(f"y_true: {y_true.shape} \ny_pred: {y_pred.shape}")
-            # Process y_true and y_pred
-            # y_true_replicated = np.concatenate(
-            #     [np.repeat(t, n) for t, n in zip(y_true, num_sessions)])
-            # y_pred_replicated = np.concatenate(
-            #     [np.repeat(p, n) for p, n in zip(y_pred, num_sessions)])
-            eventIds_replicated = np.concatenate(
-                [np.repeat(e, n) for e, n in zip(eventIds, num_sessions)])
-
+            # Find indices where y_true is equal to 1 after num_sessions replication
+            total_real_anomalies = np.where(y_true == 1)[0]
             # Find indices where both y_true and y_pred are equal to 1
-            real_anomalies = np.where(y_true == 1)[0]
-            anomalies = np.where((y_true == 1)
-                                 & (y_pred == 1))[0]
+            true_positives = np.where((y_true == 1)
+                                      & (y_pred == 1))[0]
 
-            y_pred_as_anomalies = np.where(y_pred == 1)[0]
+            y_pred_anomalies = np.where(y_pred == 1)[0]
+
+            print(f"unk events * sess : {count_unk_events}")
+            print(f"count predicted * sess: {count_predicted_anomalies}")
 
             count_unk_events = np.where(np.array(count_unk_events) == 1)[0]
             count_predicted_anomalies = np.where(
                 np.array(count_predicted_anomalies) == 1)[0]
 
-            missed_anomalies_indices = np.setdiff1d(real_anomalies, anomalies)
-            see_missed = storeLog.get_original_data(
-                eventIds_replicated[missed_anomalies_indices[0]])
-            print('Missed anomalies:', see_missed)
-            print(y_pred[missed_anomalies_indices[0]])
+            print(f"\nunknown events: {count_unk_events}")
+            print(f"predicted anomalies: {count_predicted_anomalies}")
 
             print(
-                f"[Total_real_anomalies/true positives: {len(real_anomalies)} / {len(anomalies)}] [unknown events: {len(count_unk_events)}] [predicted anomalies: {len(count_predicted_anomalies)}] [total_pred: {len(y_pred_as_anomalies)}]\n")
-
-            print(f"Y true {len(y_true)} Y pred {len(y_pred)}")
-
+                f"[Total_real_anomalies/true positives: {len(total_real_anomalies)} / {len(true_positives)}] [unknown events: {len(count_unk_events)}] [predicted anomalies: {len(count_predicted_anomalies)}] [total_pred: {len(y_pred_anomalies)}]\n")
             # See anomalies as original logs
-            # for idx in anomalies:
-            #     original_log = storeLog.get_original_data(
-            #         eventIds_replicated[idx])
-            # print(f"Anomaly {idx + 1} at: { eventIds_replicated[idx]}")
-            # print(f"Original log: {original_log}\n")
+            print("Found anomalies: \n")
+            for idx in y_pred_anomalies:
 
+                original_log = storeLog.get_original_data(
+                    eventIds_replicated[idx])
+                if idx in count_unk_events:
+                    print(f"unk: {idx} at: { eventIds_replicated[idx]}")
+                elif idx in count_predicted_anomalies:
+                    print(f"pred: {idx} at: { eventIds_replicated[idx]}")
+                else:
+                    print(
+                        f"not detected: {idx} at: { eventIds_replicated[idx]}")
         else:
             y_pred = np.array([y_pred[idx] for idx in idxs])
             y_true = np.array([y_true[idx] for idx in idxs])
@@ -345,7 +348,7 @@ class Trainer:
                                 model_name: str = None,
                                 topk: int = 9):
         train_loader = DataLoader(
-            false_positive_dataset, batch_size=self.batch_size, shuffle=True)
+            false_positive_dataset, batch_size=self.batch_size, shuffle=False)
         self.model.to(device)
         self.model, train_loader = self.accelerator.prepare(
             self.model, train_loader)
@@ -370,6 +373,7 @@ class Trainer:
                 train_loader, device, self.scheduler, progress_bar)
             total_train_loss += train_loss
         if save_dir is not None and model_name is not None:
+            print(f"Saving model to {save_dir}/{model_name}.pt")
             self.save_model(save_dir, model_name)
         _, _, train_k = self._valid_epoch(train_loader, device, topk=topk)
         print(
@@ -391,8 +395,11 @@ class Trainer:
 
     def load_model(self, model_path: str):
         checkpoint = torch.load(model_path)
+
         self.model = self.accelerator.unwrap_model(self.model)
+        # self.model.load_state_dict(checkpoint['model'])
         self.model.load_state_dict(checkpoint['model'])
+
         self.model = self.accelerator.prepare(self.model)
         if self.scheduler is not None:
             self.scheduler.load_state_dict(checkpoint['lr_scheduler'])

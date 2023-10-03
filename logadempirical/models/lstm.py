@@ -42,10 +42,13 @@ class DeepLog(nn.Module):
         x = self.embedding(x.to(device))
         out, _ = self.lstm(x)
         logits = self.fc(out[:, -1, :])
+
         probabilities = torch.softmax(logits, dim=-1)
         loss = None
+
         if y is not None and self.criterion is not None:
             loss = self.criterion(logits, y.view(-1).to(device))
+
         # print(  f"x shape: {x.shape}, x each element shape: {x[0][0].shape}, logits shape: {logits.shape}, probabilities shape: {probabilities.shape}, loss shape: {loss}")
         return ModelOutput(logits=logits, probabilities=probabilities, loss=loss, embeddings=out[:, -1, :])
 

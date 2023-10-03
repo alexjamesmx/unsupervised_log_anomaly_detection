@@ -14,3 +14,46 @@ BLOCK* NameSystem.delete: <*> is added to invalidSet of <*> 13
 <*>:Transmitted block <*> to /<*> 14
 Deleting block <*> file <*> 15
 <*> Served block <*> to /<*> 16
+
+
+
+[('blk_-8675037361865484761', [
+    'Receiving block <*> src: /<*> dest: /<*>',
+ 'Receiving block <*> src: /<*> dest: /<*>',
+  'BLOCK* NameSystem.allocateBlock: <*> <*>', 
+  'Receiving block <*> src: /<*> dest: /<*>', 
+  'PacketResponder <*> for block <*> <*>',
+   'Received block <*> of size <*> from /<*>', 
+   'PacketResponder <*> for block <*> <*>', 
+   'Received block <*> of size <*> from /<*>', 
+   'PacketResponder <*> for block <*> <*>', 
+   'Received block <*> of size <*> from /<*>', 
+   'BLOCK* NameSystem.addStoredBlock: blockMap updated: <*> is added to <*> size <*>', 
+   'BLOCK* NameSystem.addStoredBlock: blockMap updated: <*> is added to <*> size <*>', 
+   'BLOCK* NameSystem.addStoredBlock: blockMap updated: <*> is added to <*> size <*>', 
+   'BLOCK* NameSystem.addStoredBlock: Redundant addStoredBlock request received for <*> on <*> size <*>', 
+   'BLOCK* NameSystem.delete: <*> is added to invalidSet of <*>', 
+   'BLOCK* NameSystem.delete: <*> is added to invalidSet of <*>', 
+   'BLOCK* NameSystem.delete: <*> is added to invalidSet of <*>', 
+   'Deleting block <*> file <*>', 'Deleting block <*> file <*>', 
+   'Deleting block <*> file <*>'],
+    1)]
+
+{'padding': 1,
+ 'BLOCK* NameSystem.allocateBlock: <*> <*>': 2
+ , 'PacketResponder <*> for block <*> <*>': 3, '
+ <*>:Got exception while serving <*> to /<*>:': 4, 
+ 'Received block <*> of size <*> from /<*>': 5,
+  'Receiving block <*> src: /<*> dest: /<*>': 6, 
+  'BLOCK* ask <*> to replicate <*> to datanode(s) <*> <*>': 7, 
+  'BLOCK* NameSystem.delete: <*> is added to invalidSet of <*>': 8, 
+  'BLOCK* NameSystem.addStoredBlock: blockMap updated: <*> is added to <*> size <*>': 9, 
+  'Verification succeeded for <*>': 10, 
+  '<*> Starting thread to transfer block <*> to <*>': 11, 
+  '<*>:Transmitted block <*> to /<*>': 12, 
+  'Unexpected error trying to delete block <*>. BlockInfo not found in volumeMap.': 13, 
+  'Deleting block <*> file <*>': 14, 
+  'BLOCK* ask <*> to replicate <*> to datanode(s) <*>': 15, 
+  'Received block <*> src: /<*> dest: /<*> of size <*>': 16, 
+  '<*> Served block <*> to /<*>': 17, 
+  '<*> Starting thread to transfer block <*> to <*>, <*>': 18}

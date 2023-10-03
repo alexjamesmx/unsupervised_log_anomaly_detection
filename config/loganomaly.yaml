@@ -35,13 +35,14 @@ weight_decay: 0.0
 # training configuration
 accumulation_step: 2
 batch_size: 512
-max_epoch: 20
+max_epoch: 10
 
 # common configuration
 output_dir: ./output/
-load: false
 step_size: 20
-train_size: 0.1
+train_size: 0.01
 valid_ratio: 0.1
 window_size: 20
-train: true
+is_train: true
+is_load: false
+is_update: false

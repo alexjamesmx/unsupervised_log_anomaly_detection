@@ -69,6 +69,7 @@ def load_features(data_path, min_len=0, is_train=True, storeLog=Log):
 def sliding_window(data: List[Tuple[List[str], int]],
                    window_size: int = 40,
                    is_train: bool = True,
+                   is_update: bool = False,
                    vocab: Optional[Any] = None,
                    sequential: bool = False,
                    quantitative: bool = False,
@@ -97,10 +98,8 @@ def sliding_window(data: List[Tuple[List[str], int]],
     unique_ab_events = set()
 
     if is_train:
-
         for idx, (*eventId, templates, labels) in tqdm(enumerate(data), total=len(data),
                                                        desc=f"Sliding window with size {window_size}"):
-
             line = list(templates)
             line = line + [vocab.pad_token] * (window_size - len(line) + 1)
             if isinstance(labels, list):
@@ -110,6 +109,11 @@ def sliding_window(data: List[Tuple[List[str], int]],
             for i in range(len(line) - window_size):
                 label = vocab.get_event(line[i + window_size],
                                         use_similar=quantitative)  # use_similar only for LogAnomaly
+
+                if is_update and label > len(vocab.stoi):
+                    print(
+                        f"Update vocab with new event: {line[i + window_size]}")
+                    vocab.update_vocab(line[i + window_size])
 
                 seq = line[i: i + window_size]
                 sequential_pattern = [vocab.get_event(

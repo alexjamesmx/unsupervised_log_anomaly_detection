@@ -66,12 +66,47 @@ class Log(object):
             }
         }
 
+        self.fp_sliding_window = {
+            "sequentials": None,
+            "quantitivese": None,
+            "semantics": None,
+            "labels": None,
+            "sequence_idxs": None,
+            "session_labels": None,
+            "eventIds": None,
+            "lengths": {
+                "sequentials": None,
+                "quantitivese": None,
+                "semantics": None,
+                "labels": None,
+                "sequence_idxs": None,
+                "session_labels": None,
+                "eventIds": None
+            }
+        }
+
         self.train_data = []
         self.test_data = []
         self.valid_data = []
         self.original_data = []
 
         self.false_positives = []
+        self.fp_sliding_window = {
+            "sequentials": None,
+            "quantitatives": None,
+            "semantics": None,
+            "labels": None,
+            "sequence_idxs": None,
+            "session_labels": None,
+            "lengths": {
+                "sequentials":  None,
+                "quantitatives":  None,
+                "semantics":  None,
+                "labels":  None,
+                "sequence_idxs":  None,
+                "session_labels":  None,
+            }
+        }
 
         if os.path.exists(os.path.join(output_dir, "false_positives.pkl")):
             data_path = os.path.join(output_dir, "false_positives.pkl")
@@ -165,16 +200,13 @@ class Log(object):
             "semantics": semantics,
             "labels": labels,
             "sequence_idxs": sequence_idxs,
-            "session_labels": session_labels,
-            "eventIds": eventIds,
             "lengths": {
                 "sequentials": len(sequentials) if sequentials is not None else None,
                 "quantitatives": len(quantitatives) if quantitatives is not None else None,
                 "semantics": len(semantics) if semantics is not None else None,
                 "labels": len(labels) if labels is not None else None,
                 "sequence_idxs": len(sequence_idxs) if sequence_idxs is not None else None,
-                "session_labels": len(session_labels) if session_labels is not None else None,
-                "eventIds": len(eventIds) if eventIds is not None else None
+
             }
         }
 
@@ -278,3 +310,32 @@ class Log(object):
 
         with open(os.path.join(self.output_dir, "false_positives.pkl"), mode="wb") as f:
             pickle.dump(self.false_positives, f)
+
+    def set_fp_slidings(self, sequentials=None, quantitatives=None, semantics=None, labels=None,
+                        sequence_idxs=None, session_labels=None):
+        if sequentials is None and quantitatives is None and semantics is None:
+            raise ValueError('Provide at least one feature type')
+        self.fp_sliding_window = {
+            "sequentials": sequentials,
+            "quantitatives": quantitatives,
+            "semantics": semantics,
+            "labels": labels,
+            "sequence_idxs": sequence_idxs,
+            "session_labels": session_labels,
+            "lengths": {
+                "sequentials": len(sequentials) if sequentials is not None else None,
+                "quantitatives": len(quantitatives) if quantitatives is not None else None,
+                "semantics": len(semantics) if semantics is not None else None,
+                "labels": len(labels) if labels is not None else None,
+                "sequence_idxs": len(sequence_idxs) if sequence_idxs is not None else None,
+                "session_labels": len(session_labels) if session_labels is not None else None,
+            }
+        }
+
+    def get_fp_slidings(self, length=False):
+        if length:
+            print("False positive lengths:")
+            pprint(self.fp_sliding_window["lengths"])
+        else:
+            print("False positive slidings:")
+            pprint(self.fp_sliding_window)

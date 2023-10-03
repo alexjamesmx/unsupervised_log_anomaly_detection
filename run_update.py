@@ -46,6 +46,7 @@ def run_update(args, accelerator, logger):
                             embedding_dim=args.embedding_dim,
                             logger=logger)
     model = build_model(args, vocab_size=len(log_vocab))
+
     update(args,
            train_path,
            test_path,
@@ -77,6 +78,7 @@ def build_vocab(vocab_path: str,
     -------
     vocab: Vocab: Vocabulary
     """
+    updated_path = vocab_path.replace(".pkl", "_updated.pkl")
     if not os.path.exists(vocab_path):
         with open(train_path, 'rb') as f:
             data = pickle.load(f)
@@ -89,6 +91,8 @@ def build_vocab(vocab_path: str,
         logger.info(f"Vocab size: {len(vocab)}")
         vocab.save_vocab(vocab_path)
     else:
+        if os.path.exists(updated_path):
+            vocab_path = updated_path
         vocab = Vocab.load_vocab(vocab_path)
         logger.info(f"Load vocab from {vocab_path}")
         logger.info(f"Vocab size: {len(vocab)}")
@@ -160,22 +164,22 @@ def update(args: argparse.Namespace,
     """
     # Preprocess training data
 
-    train_data, valid_data = preprocess_data(
-        path=train_path,
-        args=args,
-        is_train=True,
-        storeLog=storeLog,
-        logger=logger)
+    # train_data, valid_data = preprocess_data(
+    #     path=train_path,
+    #     args=args,
+    #     is_train=True,
+    #     storeLog=storeLog,
+    #     logger=logger)
 
-    train_dataset, valid_dataset = preprocess_slidings(
-        train_data=train_data,
-        valid_data=valid_data,
-        vocab=vocab,
-        args=args,
-        is_train=True,
-        storeLog=storeLog,
-        logger=logger,
-    )
+    # train_dataset, valid_dataset = preprocess_slidings(
+    #     train_data=train_data,
+    #     valid_data=valid_data,
+    #     vocab=vocab,
+    #     args=args,
+    #     is_train=True,
+    #     storeLog=storeLog,
+    #     logger=logger,
+    # )
 
     optimizer = get_optimizer(args, model.parameters())
     device = accelerator.device
@@ -183,8 +187,8 @@ def update(args: argparse.Namespace,
 
     trainer = Trainer(
         model,
-        train_dataset=train_dataset,
-        valid_dataset=valid_dataset,
+        train_dataset=[],
+        valid_dataset=[],
         is_train=True,
         optimizer=optimizer,
         no_epochs=args.max_epoch,
@@ -197,24 +201,26 @@ def update(args: argparse.Namespace,
         num_classes=len(vocab),
     )
 
-    session_labels = valid_dataset.get_session_labels()
+    # session_labels = valid_dataset.get_session_labels()
 
-    logger.info(
-        f"Length of sessions labels: {len(session_labels)}, Length of valid dataset: {len(valid_dataset)}")
+    # logger.info(
+    # f"Length of sessions labels: {len(session_labels)}, Length of valid dataset: {len(valid_dataset)}")
 
-    acc, recommend_topk = trainer.predict_unsupervised(valid_dataset,
-                                                       session_labels,
-                                                       topk=args.topk,
-                                                       device=device,
-                                                       is_valid=True)
-    logger.info(
-        f"Validation Result:: Acc: {acc:.4f}, Top-{args.topk} Recommendation: {recommend_topk}\n")
+    # acc, recommend_topk = trainer.predict_unsupervised(valid_dataset,
+    #    session_labels,
+    #    topk=args.topk,
+    #    device=device,
+    #    is_valid=True)
+    # logger.info(
+    #     f"Validation Result:: Acc: {acc:.4f}, Top-{args.topk} Recommendation: {recommend_topk}\n")
 
     logger.info(
         f"Loading model from {args.output_dir}/models/{args.model_name}.pt{model}\n")
     logger.info(
         f"Start update training {args.model_name} model on {device} device\n")
-    trainer.load_model(f"{args.output_dir}/models/{args.model_name}.pt")
+
+    trainer.load_model(
+        f"{args.output_dir}/models/{args.model_name}.pt")
 
     preprocess_data(
         path=test_path,
@@ -224,30 +230,89 @@ def update(args: argparse.Namespace,
         logger=logger)
 
     false_positive_data = storeLog.get_test_data(
-        blockId="blk_-4915620745666827022")
+        blockId="blk_-6261833220433936064")
 
     if len(false_positive_data) == 0:
         raise Exception("False positive with id = n is not found")
 
+    print(false_positive_data)
+
+    if_unk_vocab_size_before = len(vocab)
     sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels = sliding_window(
         false_positive_data,
         vocab=vocab,
         window_size=args.history_size,
         is_train=True,
+        is_update=True,
         semantic=args.semantic,
         quantitative=args.quantitative,
         sequential=args.sequential,
         logger=logger
     )
+    if_unk_vocab_size_after = len(vocab)
+
+    print(
+        f"Vocab size before: {if_unk_vocab_size_before}, Vocab size after: {if_unk_vocab_size_after}")
+    model = build_model(args, vocab_size=len(vocab))
+    model.to(device)
+    trainer = Trainer(
+        model,
+        train_dataset=train_dataset,
+        valid_dataset=[],
+        is_train=True,
+        optimizer=optimizer,
+        no_epochs=args.max_epoch,
+        batch_size=args.batch_size,
+        scheduler_type=args.scheduler,
+        warmup_rate=args.warmup_rate,
+        accumulation_step=args.accumulation_step,
+        logger=logger,
+        accelerator=accelerator,
+        num_classes=len(vocab),
+    )
+
+    trainer.save_model(save_dir=f"{args.output_dir}/models",
+                       model_name=args.model_name,)
+    if (if_unk_vocab_size_before != if_unk_vocab_size_after):
+        model = build_model(args, vocab_size=len(vocab))
+        trainer = Trainer(
+            model,
+            train_dataset=train_dataset,
+            valid_dataset=[],
+            is_train=True,
+            optimizer=optimizer,
+            no_epochs=args.max_epoch,
+            batch_size=args.batch_size,
+            scheduler_type=args.scheduler,
+            warmup_rate=args.warmup_rate,
+            accumulation_step=args.accumulation_step,
+            logger=logger,
+            accelerator=accelerator,
+            num_classes=len(vocab),
+        )
+        print("bien")
+        trainer.save_model(save_dir=f"{args.output_dir}/models",
+                           model_name=args.model_name,)
+        print('mal')
+
     false_positive_dataset = LogDataset(
-        sequentials, quantitatives, semantics, labels, sequence_idxs)
+        sequentials, quantitatives, semantics, labels, sequence_idxs, session_labels=session_labels)
+
+    storeLog.set_fp_slidings(sequentials=sequentials,
+                             quantitatives=quantitatives,
+                             semantics=semantics,
+                             labels=labels,
+                             sequence_idxs=sequence_idxs,
+                             session_labels=session_labels)
+    # print(storeLog.get_fp_slidings())
     train_loss = 0
     train_loss, args.topk = trainer.train_on_false_positive(false_positive_dataset=false_positive_dataset,
                                                             device=device,
                                                             save_dir=f"{args.output_dir}/models",
                                                             model_name=args.model_name,
                                                             topk=args.topk)
-    storeLog.set_false_positives(false_positive_data)
-    logger.info(f"UPDATED MODEL Train Loss: {train_loss:.4f}")
+    logger.info(f"Updated Train Loss: {train_loss:.4f}")
 
-    print(storeLog.false_positives)
+    storeLog.set_false_positives(false_positive_data)
+
+    # print(storeLog.false_positives)

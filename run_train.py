@@ -181,6 +181,7 @@ def train(args: argparse.Namespace,
     device = accelerator.device
     model = model.to(device)
 
+    storeLog.get_train_sliding_window(length=True)
     trainer = Trainer(
         model,
         train_dataset=train_dataset,
@@ -251,7 +252,8 @@ def train(args: argparse.Namespace,
                                                      device=device,
                                                      is_valid=False,
                                                      num_sessions=num_sessions,
-                                                     eventIds=eventIds
+                                                     eventIds=eventIds,
+                                                     storeLog=storeLog
                                                      )
 
     logger.info(
