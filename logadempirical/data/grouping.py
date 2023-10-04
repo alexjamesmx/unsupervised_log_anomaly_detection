@@ -30,7 +30,8 @@ def session_window(raw_data, id_regex, label_dict, window_size=20):
     for k, v in data_dict.items():
         results.append({"SessionId": k, "EventId": v["EventId"], "EventTemplate": v["EventTemplate"],
                         "Content": v["Content"], "Label": label_dict[k]})
-    results = shuffle(results)
+        # NOTE shuffle was true
+    # results = shuffle(results)
     return results
 
 
@@ -58,6 +59,7 @@ def session_window_bgl(raw_data):
     for k, v in data_dict.items():
         results.append({"SessionId": k, "EventId": v["EventId"], "EventTemplate": v["EventTemplate"],
                         "Content": v["Content"], "Label": label_dict[k]})
+    # NOTE shuffle was true
     results = shuffle(results)
     return results
 

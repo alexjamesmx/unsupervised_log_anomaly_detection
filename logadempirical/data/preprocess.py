@@ -18,16 +18,24 @@ def preprocess_data(path: str,
     logger.info(f"{phase_message} data length: {len(data)}")
     logger.info(f"{phase_message} log sequences statistics: {stat}\n")
     if is_train:
-        data = shuffle(data)
+        # NOTE shuffle was true
+        # data = shuffle(data)
         n_valid = int(len(data) * args.valid_ratio)
         train_data, valid_data = data[:-n_valid], data[-n_valid:]
         storeLog.set_train_data(train_data)
         storeLog.set_valid_data(valid_data)
         storeLog.set_lengths(train_length=len(train_data), valid_length=len(
             valid_data))
+
+        fp = storeLog.false_positives
+        print('False positives: ', fp)
+        print("shape before ", len(train_data))
+        train_data = train_data + fp
+        print("shape after", len(train_data))
+
         return train_data, valid_data
     else:
-        test_data = data[:500]
+        test_data = data[:200]
         print("Total test data: ", len(test_data))
         storeLog.set_test_data(test_data)
         storeLog.set_lengths(test_length=len(test_data))

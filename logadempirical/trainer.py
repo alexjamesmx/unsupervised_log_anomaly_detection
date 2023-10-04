@@ -112,8 +112,9 @@ class Trainer:
               save_dir: str = None,
               model_name: str = None,
               topk: int = 9):
+        # NOTE shuffle was true
         train_loader = DataLoader(
-            self.train_dataset, batch_size=self.batch_size, shuffle=True)
+            self.train_dataset, batch_size=self.batch_size, shuffle=False)
         val_loader = DataLoader(
             self.valid_dataset, batch_size=self.batch_size, shuffle=False)
         self.model.to(device)
@@ -262,23 +263,27 @@ class Trainer:
         self.logger.info(f"Computing metrics...")
 
         if num_sessions is not None:
-            self.logger.info(f"Total sessions: {sum(num_sessions)}")
+            self.logger.info(
+                f"Total sessions: {sum(num_sessions)} {num_sessions}")
             # --TESTING ONLY------
-            print("Number of sessions: ", num_sessions)
             print(
-                f"\ncount unk events: {count_unk_events} total {sum(count_unk_events.values())}")
+                f"\nunkown events: {count_unk_events} total {sum(count_unk_events.values())}")
             print(
-                f"count predicted: {count_predicted_anomalies} total {sum(count_predicted_anomalies.values())}")
-            test = np.array([v for _, v in y_true.items()])
-            print("real anomalies: ", test, " total ", sum(test), "\n")
-            test2 = np.array([v for _, v in count_predicted_anomalies.items()])
-            test3 = np.array([v for _, v in count_unk_events.items()])
-            missed_anomalies_indices = np.where(
-                (test == 1) & (test2 == 0))[0]
-            print("missed anomalies indices: ", missed_anomalies_indices)
-            unk_anomalies_indices = np.where(
-                (test == 1) & (test3 == 1))[0]
-            print("unk indices: ", unk_anomalies_indices, "\n")
+                f"predicted: {count_predicted_anomalies} total {sum(count_predicted_anomalies.values())}")
+            metrics_y_true = np.array([v for _, v in y_true.items()])
+            print("Actual anomalies: ", metrics_y_true,
+                  " total ", sum(metrics_y_true), "\n")
+
+            metrics_predicted = np.array(
+                [v for _, v in count_predicted_anomalies.items()])
+            metrics_unkown = np.array([v for _, v in count_unk_events.items()])
+            unpredicted_anomalies_indices = np.where(
+                (metrics_y_true == 1) & (metrics_predicted == 0))[0]
+            print("unpredicted anomalies indices: ",
+                  unpredicted_anomalies_indices)
+            unkown_anomalies_indices = np.where(
+                (metrics_y_true == 1) & (metrics_unkown == 1))[0]
+            print("unk indices: ", unkown_anomalies_indices, "\n")
             # -----------------
             eventIds = [eventIds[idx] for idx in idxs]
             eventIds_replicated = np.concatenate(
@@ -305,24 +310,23 @@ class Trainer:
 
             y_pred_anomalies = np.where(y_pred == 1)[0]
 
-            print(f"unk events * sess : {count_unk_events}")
-            print(f"count predicted * sess: {count_predicted_anomalies}")
+            print(f"unknown * num_sess : {count_unk_events}")
+            print(f"predicted * num_sess: {count_predicted_anomalies}")
 
             count_unk_events = np.where(np.array(count_unk_events) == 1)[0]
             count_predicted_anomalies = np.where(
                 np.array(count_predicted_anomalies) == 1)[0]
 
-            print(f"\nunknown events: {count_unk_events}")
-            print(f"predicted anomalies: {count_predicted_anomalies}")
-
+            print(f"\nunknown anomalies * num_sess: {count_unk_events}")
             print(
-                f"[Total_real_anomalies/true positives: {len(total_real_anomalies)} / {len(true_positives)}] [unknown events: {len(count_unk_events)}] [predicted anomalies: {len(count_predicted_anomalies)}] [total_pred: {len(y_pred_anomalies)}]\n")
-            # See anomalies as original logs
+                f"predicted anomalies * num_sess: {count_predicted_anomalies}")
+            print(
+                f"After sessions [Total_real_anomalies/true positives: {len(total_real_anomalies)} / {len(true_positives)}] [unknown events: {len(count_unk_events)}] [predicted anomalies: {len(count_predicted_anomalies)}] [total_pred: {len(y_pred_anomalies)}]\n")
+            # See predicted anomalies as original logs
             print("Found anomalies: \n")
             for idx in y_pred_anomalies:
-
-                original_log = storeLog.get_original_data(
-                    eventIds_replicated[idx])
+                # original_log = storeLog.get_original_data(
+                # eventIds_replicated[idx])
                 if idx in count_unk_events:
                     print(f"unk: {idx} at: { eventIds_replicated[idx]}")
                 elif idx in count_predicted_anomalies:
@@ -330,6 +334,20 @@ class Trainer:
                 else:
                     print(
                         f"not detected: {idx} at: { eventIds_replicated[idx]}")
+            # False negatives (missed anoamlies) - type: predicted or unknown
+            fn_unpredicted = np.setdiff1d(
+                unpredicted_anomalies_indices, unkown_anomalies_indices)
+            fn_unknown = np.setdiff1d(
+                unkown_anomalies_indices, unpredicted_anomalies_indices)
+
+            for idx in fn_unpredicted:
+                print(
+                    f"missed predicted: {idx} at: { eventIds_replicated[idx]}")
+
+            for idx in fn_unknown:
+                print(
+                    f"missed unknown: {idx} at: { eventIds_replicated[idx]}")
+
         else:
             y_pred = np.array([y_pred[idx] for idx in idxs])
             y_true = np.array([y_true[idx] for idx in idxs])
@@ -397,7 +415,6 @@ class Trainer:
         checkpoint = torch.load(model_path)
 
         self.model = self.accelerator.unwrap_model(self.model)
-        # self.model.load_state_dict(checkpoint['model'])
         self.model.load_state_dict(checkpoint['model'])
 
         self.model = self.accelerator.prepare(self.model)

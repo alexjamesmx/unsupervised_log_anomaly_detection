@@ -218,8 +218,6 @@ def eval(args: argparse.Namespace,
     storeLog.lengths
 
     storeLog.get_test_sliding_window(length=True)
-    # print(
-    #     f"eventIds: {len(eventIds)} - session_labels: {len(session_labels)}\n")
 
     logger.info(
         f"Start predicting {args.model_name} model on {device} device with top-{args.topk} recommendation")

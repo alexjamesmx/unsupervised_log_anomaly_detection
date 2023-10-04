@@ -73,7 +73,6 @@ class Log(object):
             "labels": None,
             "sequence_idxs": None,
             "session_labels": None,
-            "eventIds": None,
             "lengths": {
                 "sequentials": None,
                 "quantitivese": None,
@@ -81,7 +80,6 @@ class Log(object):
                 "labels": None,
                 "sequence_idxs": None,
                 "session_labels": None,
-                "eventIds": None
             }
         }
 
@@ -206,7 +204,6 @@ class Log(object):
                 "semantics": len(semantics) if semantics is not None else None,
                 "labels": len(labels) if labels is not None else None,
                 "sequence_idxs": len(sequence_idxs) if sequence_idxs is not None else None,
-
             }
         }
 
@@ -266,6 +263,9 @@ class Log(object):
 
         if n < 0 or m < 0 or n > len(self.test_data) or m > len(self.test_data) or n > m:
             raise ValueError("Invalid range")
+
+        if len(self.test_data[n:m]) == 0:
+            raise Exception("False positive with id = n is not found")
 
         return self.test_data[n:m]
 

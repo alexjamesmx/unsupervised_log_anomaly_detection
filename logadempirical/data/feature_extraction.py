@@ -112,7 +112,7 @@ def sliding_window(data: List[Tuple[List[str], int]],
 
                 if is_update and label > len(vocab.stoi):
                     print(
-                        f"Update vocab with new event: {line[i + window_size]}")
+                        f"---------------_@@@Update vocab with new event: {line[i + window_size]}")
                     vocab.update_vocab(line[i + window_size])
 
                 seq = line[i: i + window_size]

@@ -64,7 +64,8 @@ def process_dataset(logger: Logger,
                 window_size=window_size,
                 step_size=step_size
             )
-            window_df = shuffle(window_df)
+            # NOTE shuffle was true
+            # window_df = shuffle(window_df)
             n_train = int(len(window_df) * train_size)
             train_window = window_df[:n_train]
             test_window = window_df[n_train:]
